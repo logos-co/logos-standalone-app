@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -13,8 +14,37 @@
 #include <QQmlError>
 #include <QUrl>
 #include <QQmlEngine>
+#include <QQmlContext>
 
 #include "logos_api.h"
+#include "logos_api_client.h"
+
+extern "C" int logos_core_load_plugin(const char* plugin_name);
+
+// Bridge exposed to QML as the "logos" context property.
+// Mirrors LogosQmlBridge in logos-app.
+class LogosBridge : public QObject
+{
+    Q_OBJECT
+public:
+    explicit LogosBridge(LogosAPI* api, QObject* parent = nullptr)
+        : QObject(parent), m_api(api) {}
+
+    Q_INVOKABLE QVariant callModule(const QString& moduleName,
+                                    const QString& method,
+                                    const QVariantList& args = {})
+    {
+        if (!m_api) return {};
+        LogosAPIClient* client = m_api->getClient(moduleName);
+        if (!client || !client->isConnected()) return {};
+        return client->invokeRemoteMethod(moduleName, method, args);
+    }
+
+private:
+    LogosAPI* m_api;
+};
+
+#include "mainwindow.moc"
 
 MainWindow::MainWindow(const QString& pluginPath,
                        const QString& title,
@@ -33,26 +63,45 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
     QWidget* widget = nullptr;
 
     // All plugin types (ui and ui_qml) live in a directory.
-    // Read manifest.json to decide how to load.
-    QFile manifestFile(resolvedPath + "/manifest.json");
-    if (!manifestFile.open(QIODevice::ReadOnly)) {
-        qWarning() << "No manifest.json in plugin directory:" << resolvedPath;
+    // Prefer metadata.json (plain format used by individual plugin repos);
+    // fall back to manifest.json (platform-map format used in the standalone plugins/ dir).
+    QJsonObject pluginInfo;
+    for (const QString& name : {QString("metadata.json"), QString("manifest.json")}) {
+        QFile f(resolvedPath + "/" + name);
+        if (f.open(QIODevice::ReadOnly)) {
+            pluginInfo = QJsonDocument::fromJson(f.readAll()).object();
+            break;
+        }
+    }
+    if (pluginInfo.isEmpty()) {
+        qWarning() << "No metadata.json or manifest.json in plugin directory:" << resolvedPath;
     } else {
-        QJsonObject manifest = QJsonDocument::fromJson(manifestFile.readAll()).object();
-        QString type = manifest.value("type").toString();
+        QString type = pluginInfo.value("type").toString();
+
+        // Load backend dependencies declared in metadata before showing the UI,
+        // mirroring logos-app's MainUIBackend::loadUiModule() dependency handling.
+        for (const QJsonValue& dep : pluginInfo.value("dependencies").toArray()) {
+            QString depName = dep.toString();
+            if (depName.isEmpty()) continue;
+            if (logos_core_load_plugin(depName.toUtf8().constData())) {
+                qInfo() << "Loaded dependency:" << depName;
+            } else {
+                qWarning() << "Failed to load dependency:" << depName;
+            }
+        }
 
         if (type == "ui_qml") {
-            // QML plugin — metadata.json carries a plain "main" filename.
-            QFile metaFile(resolvedPath + "/metadata.json");
-            QString mainFile = "Main.qml";
-            if (metaFile.open(QIODevice::ReadOnly))
-                mainFile = QJsonDocument::fromJson(metaFile.readAll()).object()
-                               .value("main").toString(mainFile);
+            // QML plugin — "main" is a plain filename string in metadata.json.
+            QString mainFile = pluginInfo.value("main").toString("Main.qml");
+
+            LogosAPI* logosAPI = new LogosAPI("standalone", this);
+            auto* bridge = new LogosBridge(logosAPI, this);
 
             auto* quickWidget = new QQuickWidget();
             quickWidget->setMinimumSize(800, 600);
             quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
             quickWidget->engine()->setBaseUrl(QUrl::fromLocalFile(resolvedPath + "/"));
+            quickWidget->rootContext()->setContextProperty("logos", bridge);
             quickWidget->setSource(QUrl::fromLocalFile(resolvedPath + "/" + mainFile));
 
             if (quickWidget->status() == QQuickWidget::Error) {

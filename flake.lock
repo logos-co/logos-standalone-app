@@ -2,34 +2,6 @@
   "nodes": {
     "logos-capability-module": {
       "inputs": {
-        "logos-cpp-sdk": [
-          "logos-cpp-sdk"
-        ],
-        "logos-liblogos": [
-          "logos-liblogos"
-        ],
-        "nixpkgs": [
-          "logos-capability-module",
-          "logos-liblogos",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1767809111,
-        "narHash": "sha256-jehjsB+BpDJlVu3I7x+vFVOdXmy9MDmFTJtRqzFUONo=",
-        "owner": "logos-co",
-        "repo": "logos-capability-module",
-        "rev": "7b35383e0aa4e28a4633ed18a87efb57636939b1",
-        "type": "github"
-      },
-      "original": {
-        "owner": "logos-co",
-        "repo": "logos-capability-module",
-        "type": "github"
-      }
-    },
-    "logos-capability-module_2": {
-      "inputs": {
         "logos-cpp-sdk": "logos-cpp-sdk_3",
         "logos-liblogos": "logos-liblogos_2",
         "nixpkgs": [
@@ -186,7 +158,7 @@
     },
     "logos-liblogos": {
       "inputs": {
-        "logos-capability-module": "logos-capability-module_2",
+        "logos-capability-module": "logos-capability-module",
         "logos-cpp-sdk": "logos-cpp-sdk_5",
         "logos-module": "logos-module",
         "nix-bundle-appimage": "nix-bundle-appimage",
@@ -449,7 +421,6 @@
     },
     "root": {
       "inputs": {
-        "logos-capability-module": "logos-capability-module",
         "logos-cpp-sdk": "logos-cpp-sdk",
         "logos-design-system": "logos-design-system",
         "logos-liblogos": "logos-liblogos",

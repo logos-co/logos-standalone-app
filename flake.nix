@@ -6,12 +6,9 @@
       logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk";
       logos-liblogos.url = "github:logos-co/logos-liblogos";
       logos-design-system.url = "github:logos-co/logos-design-system";
-      logos-capability-module.url = "github:logos-co/logos-capability-module";
-      logos-capability-module.inputs.logos-liblogos.follows = "logos-liblogos";
-      logos-capability-module.inputs.logos-cpp-sdk.follows = "logos-cpp-sdk";
     };
 
-    outputs = { self, nixpkgs, logos-cpp-sdk, logos-liblogos, logos-design-system, logos-capability-module }:
+    outputs = { self, nixpkgs, logos-cpp-sdk, logos-liblogos, logos-design-system }:
       let
         systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
         forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
@@ -20,14 +17,13 @@
           logosSdk = logos-cpp-sdk.packages.${system}.default;
           logosLiblogos = logos-liblogos.packages.${system}.default;
           logosDesignSystem = logos-design-system.packages.${system}.default;
-          logosCapabilityModule = logos-capability-module.packages.${system}.default;
         });
       in
       {
-        packages = forAllSystems ({ pkgs, logosSdk, logosLiblogos, logosDesignSystem, logosCapabilityModule, ... }:
+        packages = forAllSystems ({ pkgs, logosSdk, logosLiblogos, logosDesignSystem, ... }:
           let
             app = import ./nix/app.nix {
-              inherit pkgs logosSdk logosLiblogos logosDesignSystem logosCapabilityModule;
+              inherit pkgs logosSdk logosLiblogos logosDesignSystem;
               src = ./.;
             };
           in

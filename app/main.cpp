@@ -9,7 +9,6 @@
 
 extern "C" {
     void logos_core_set_plugins_dir(const char* plugins_dir);
-    void logos_core_add_plugins_dir(const char* plugins_dir);
     void logos_core_start();
     void logos_core_cleanup();
     char** logos_core_get_loaded_plugins();
@@ -76,22 +75,10 @@ int main(int argc, char* argv[])
         modulesDir = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules");
     }
 
-    // Setup logos core — primary modules dir plus fallback locations so that
-    // capability_module_plugin can be found when using the CLI workflow without
-    // a fully-configured --modules-dir (e.g. placed next to the binary or in ../lib).
+    // Setup logos core
     logos_core_set_plugins_dir(modulesDir.toUtf8().constData());
-    const QString binDir = QCoreApplication::applicationDirPath();
-    logos_core_add_plugins_dir(binDir.toUtf8().constData());
-    logos_core_add_plugins_dir(QDir::cleanPath(binDir + "/../lib").toUtf8().constData());
     logos_core_start();
     std::cout << "Logos Core started (modules dir: " << modulesDir.toStdString() << ")" << std::endl;
-
-    // Always load the capability module first — required by all UI plugins
-    if (logos_core_load_plugin("capability_module_plugin")) {
-        std::cout << "Loaded module: capability_module_plugin" << std::endl;
-    } else {
-        std::cerr << "Warning: failed to load capability_module_plugin (not found in " << modulesDir.toStdString() << ")" << std::endl;
-    }
 
     // Load requested backend modules in order
     for (const QString& module : parser.values(loadOption)) {

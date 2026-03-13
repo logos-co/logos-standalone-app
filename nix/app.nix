@@ -1,4 +1,4 @@
-{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem, logosCapabilityModule }:
+{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem }:
 
   pkgs.stdenv.mkDerivation rec {
     pname = "logos-standalone-app";
@@ -125,9 +125,6 @@
 #!/bin/sh
 export QML_IMPORT_PATH="$out/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml\''${QML_IMPORT_PATH:+:\$QML_IMPORT_PATH}"
 export QML2_IMPORT_PATH="\$QML_IMPORT_PATH"
-# Expose Qt lib dirs so plugins loaded at runtime (e.g. capability_module_plugin)
-# can resolve @rpath Qt framework dependencies via DYLD_LIBRARY_PATH.
-export DYLD_LIBRARY_PATH="${pkgs.qt6.qtremoteobjects}/lib:${pkgs.qt6.qtbase}/lib\''${DYLD_LIBRARY_PATH:+:\$DYLD_LIBRARY_PATH}"
 exec "$out/bin/.logos-standalone-bin" "\$@"
 EOF
       chmod +x "$out/bin/logos-standalone"
@@ -143,24 +140,6 @@ EOF
       if [ -d "${logosDesignSystem}/lib/Logos" ]; then
         cp -r "${logosDesignSystem}/lib/Logos" "$out/lib/"
       fi
-
-      # Bundle the capability module — required by all UI plugins.
-      # Copied to both $out/modules/ (default modules dir) and $out/lib/
-      # (fallback search path) so it is found in both the Nix and CLI workflows.
-      mkdir -p "$out/modules"
-      for ext in dylib so; do
-        f="${logosCapabilityModule}/lib/capability_module_plugin.$ext"
-        if [ -f "$f" ]; then
-          cp -L "$f" "$out/modules/"
-          cp -L "$f" "$out/lib/"
-          # The dylib's embedded rpath may only include qtbase, not qtremoteobjects.
-          # Patch it on macOS so dlopen can resolve QtRemoteObjects.framework.
-          if [ "$ext" = "dylib" ]; then
-            install_name_tool -add_rpath "${pkgs.qt6.qtremoteobjects}/lib" "$out/modules/capability_module_plugin.$ext" 2>/dev/null || true
-            install_name_tool -add_rpath "${pkgs.qt6.qtremoteobjects}/lib" "$out/lib/capability_module_plugin.$ext" 2>/dev/null || true
-          fi
-        fi
-      done
 
       runHook postInstall
     '';

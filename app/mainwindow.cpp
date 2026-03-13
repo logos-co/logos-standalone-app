@@ -36,11 +36,13 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
         if (plugin) {
             // Prefer createWidget(LogosAPI*) — the canonical IComponent signature.
             // logos_core must already be running for LogosAPI to function.
-            LogosAPI logosAPI("standalone", nullptr);
+            // Heap-allocate and parent to this so it outlives setupUi() and
+            // remains valid for the lifetime of any plugin backend that stores it.
+            LogosAPI* logosAPI = new LogosAPI("standalone", this);
             bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
                                                Qt::DirectConnection,
                                                Q_RETURN_ARG(QWidget*, widget),
-                                               Q_ARG(LogosAPI*, &logosAPI));
+                                               Q_ARG(LogosAPI*, logosAPI));
 
             // Fallback: some plugins expose createWidget() with no args
             if (!ok || !widget) {

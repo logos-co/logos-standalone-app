@@ -1,4 +1,4 @@
-{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem }:
+{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem, logosCapabilityModule }:
 
   pkgs.stdenv.mkDerivation rec {
     pname = "logos-standalone-app";
@@ -56,6 +56,7 @@
     qtWrapperArgs = [
       "--prefix" "LD_LIBRARY_PATH" ":" qtLibPath
       "--prefix" "QT_PLUGIN_PATH" ":" qtPluginPath
+      "--prefix" "QML_IMPORT_PATH" ":" qmlImportPath
       "--prefix" "QML2_IMPORT_PATH" ":" qmlImportPath
     ];
 
@@ -116,7 +117,17 @@
 
       mkdir -p $out/bin $out/lib
 
-      cp build/bin/logos-standalone "$out/bin/"
+      cp build/bin/logos-standalone "$out/bin/.logos-standalone-bin"
+
+      # wrapQtAppsHook does not create shell wrappers on macOS, so we do it manually
+      # to ensure QML_IMPORT_PATH is set before the QML engine initialises.
+      cat > "$out/bin/logos-standalone" << EOF
+#!/bin/sh
+export QML_IMPORT_PATH="$out/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml\''${QML_IMPORT_PATH:+:\$QML_IMPORT_PATH}"
+export QML2_IMPORT_PATH="\$QML_IMPORT_PATH"
+exec "$out/bin/.logos-standalone-bin" "\$@"
+EOF
+      chmod +x "$out/bin/logos-standalone"
 
       [ -f "${logosLiblogos}/bin/logos_host" ] && cp -L "${logosLiblogos}/bin/logos_host" "$out/bin/"
 
@@ -129,6 +140,13 @@
       if [ -d "${logosDesignSystem}/lib/Logos" ]; then
         cp -r "${logosDesignSystem}/lib/Logos" "$out/lib/"
       fi
+
+      # Bundle the capability module — required by all UI plugins
+      mkdir -p "$out/modules"
+      for ext in dylib so; do
+        f="${logosCapabilityModule}/lib/capability_module_plugin.$ext"
+        [ -f "$f" ] && cp -L "$f" "$out/modules/"
+      done
 
       runHook postInstall
     '';

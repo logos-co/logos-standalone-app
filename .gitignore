@@ -1,0 +1,29 @@
+# Nix build outputs
+result
+result-*
+
+# CMake build directories
+build/
+app/build/
+
+# Qt / C++ artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+moc_*.cpp
+*.moc
+qrc_*.cpp
+
+# macOS
+.DS_Store
+
+# IDE / editor
+.vscode/
+.idea/
+*.user
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt

@@ -81,6 +81,13 @@ int main(int argc, char* argv[])
     logos_core_start();
     std::cout << "Logos Core started (modules dir: " << modulesDir.toStdString() << ")" << std::endl;
 
+    // Always load the capability module first — required by all UI plugins
+    if (logos_core_load_plugin("capability_module_plugin")) {
+        std::cout << "Loaded module: capability_module_plugin" << std::endl;
+    } else {
+        std::cerr << "Warning: failed to load capability_module_plugin (not found in " << modulesDir.toStdString() << ")" << std::endl;
+    }
+
     // Load requested backend modules in order
     for (const QString& module : parser.values(loadOption)) {
         if (logos_core_load_plugin(module.toUtf8().constData())) {

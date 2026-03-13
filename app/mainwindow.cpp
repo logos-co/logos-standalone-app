@@ -1,13 +1,19 @@
 #include "mainwindow.h"
 
-#include <QCoreApplication>
 #include <QPluginLoader>
 #include <QFileInfo>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QDebug>
+#include <QQuickWidget>
+#include <QQmlError>
+#include <QUrl>
+#include <QQmlEngine>
 
-// LogosAPI for plugins that require it (IComponent interface)
 #include "logos_api.h"
 
 MainWindow::MainWindow(const QString& pluginPath,
@@ -24,31 +30,68 @@ MainWindow::MainWindow(const QString& pluginPath,
 void MainWindow::setupUi(const QString& pluginPath, int width, int height)
 {
     QString resolvedPath = QFileInfo(pluginPath).absoluteFilePath();
-
-    QPluginLoader loader(resolvedPath);
     QWidget* widget = nullptr;
 
-    if (!loader.load()) {
-        qWarning() << "Failed to load plugin from:" << resolvedPath;
-        qWarning() << "Error:" << loader.errorString();
+    // All plugin types (ui and ui_qml) live in a directory.
+    // Read manifest.json to decide how to load.
+    QFile manifestFile(resolvedPath + "/manifest.json");
+    if (!manifestFile.open(QIODevice::ReadOnly)) {
+        qWarning() << "No manifest.json in plugin directory:" << resolvedPath;
     } else {
-        QObject* plugin = loader.instance();
-        if (plugin) {
-            // Prefer createWidget(LogosAPI*) — the canonical IComponent signature.
-            // logos_core must already be running for LogosAPI to function.
-            // Heap-allocate and parent to this so it outlives setupUi() and
-            // remains valid for the lifetime of any plugin backend that stores it.
-            LogosAPI* logosAPI = new LogosAPI("standalone", this);
-            bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
-                                               Qt::DirectConnection,
-                                               Q_RETURN_ARG(QWidget*, widget),
-                                               Q_ARG(LogosAPI*, logosAPI));
+        QJsonObject manifest = QJsonDocument::fromJson(manifestFile.readAll()).object();
+        QString type = manifest.value("type").toString();
 
-            // Fallback: some plugins expose createWidget() with no args
-            if (!ok || !widget) {
-                QMetaObject::invokeMethod(plugin, "createWidget",
-                                         Qt::DirectConnection,
-                                         Q_RETURN_ARG(QWidget*, widget));
+        if (type == "ui_qml") {
+            // QML plugin — metadata.json carries a plain "main" filename.
+            QFile metaFile(resolvedPath + "/metadata.json");
+            QString mainFile = "Main.qml";
+            if (metaFile.open(QIODevice::ReadOnly))
+                mainFile = QJsonDocument::fromJson(metaFile.readAll()).object()
+                               .value("main").toString(mainFile);
+
+            auto* quickWidget = new QQuickWidget();
+            quickWidget->setMinimumSize(800, 600);
+            quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+            quickWidget->engine()->setBaseUrl(QUrl::fromLocalFile(resolvedPath + "/"));
+            quickWidget->setSource(QUrl::fromLocalFile(resolvedPath + "/" + mainFile));
+
+            if (quickWidget->status() == QQuickWidget::Error) {
+                qWarning() << "Failed to load QML plugin:" << resolvedPath;
+                for (const QQmlError& e : quickWidget->errors())
+                    qWarning() << e.toString();
+                delete quickWidget;
+            } else {
+                widget = quickWidget;
+            }
+        } else {
+            // Dylib plugin — find the shared library file inside the directory.
+            QStringList libs = QDir(resolvedPath).entryList(
+                {"*.dylib", "*.so", "*.dll"}, QDir::Files);
+            if (libs.isEmpty()) {
+                qWarning() << "No shared library found in plugin directory:" << resolvedPath;
+            } else {
+                QString dylibPath = resolvedPath + "/" + libs.first();
+                QPluginLoader loader(dylibPath);
+                if (!loader.load()) {
+                    qWarning() << "Failed to load plugin:" << loader.errorString();
+                } else {
+                    QObject* plugin = loader.instance();
+                    if (plugin) {
+                        // Heap-allocate LogosAPI parented to this so it outlives setupUi()
+                        // and remains valid for the lifetime of any backend that stores it.
+                        LogosAPI* logosAPI = new LogosAPI("standalone", this);
+                        bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
+                                                           Qt::DirectConnection,
+                                                           Q_RETURN_ARG(QWidget*, widget),
+                                                           Q_ARG(LogosAPI*, logosAPI));
+                        // Fallback: some plugins expose createWidget() with no args
+                        if (!ok || !widget) {
+                            QMetaObject::invokeMethod(plugin, "createWidget",
+                                                     Qt::DirectConnection,
+                                                     Q_RETURN_ARG(QWidget*, widget));
+                        }
+                    }
+                }
             }
         }
     }
@@ -57,19 +100,10 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
         setCentralWidget(widget);
         qInfo() << "Loaded UI plugin:" << resolvedPath;
     } else {
-        qWarning() << "================================================";
-        qWarning() << "Plugin loaded but createWidget() returned null";
-        qWarning() << "Plugin path:" << resolvedPath;
-        qWarning() << "Loader error:" << loader.errorString();
-        qWarning() << "================================================";
-
         QWidget* fallback = new QWidget(this);
         QVBoxLayout* layout = new QVBoxLayout(fallback);
-
         QLabel* label = new QLabel(
-            QString("Failed to load UI plugin\n\n%1\n\n%2")
-                .arg(resolvedPath, loader.errorString()),
-            fallback);
+            QString("Failed to load UI plugin\n\n%1").arg(resolvedPath), fallback);
         label->setAlignment(Qt::AlignCenter);
         label->setWordWrap(true);
         QFont font = label->font();

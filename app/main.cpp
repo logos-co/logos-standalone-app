@@ -76,8 +76,13 @@ int main(int argc, char* argv[])
         modulesDir = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules");
     }
 
-    // Setup logos core
+    // Setup logos core — primary modules dir plus fallback locations so that
+    // capability_module_plugin can be found when using the CLI workflow without
+    // a fully-configured --modules-dir (e.g. placed next to the binary or in ../lib).
     logos_core_set_plugins_dir(modulesDir.toUtf8().constData());
+    const QString binDir = QCoreApplication::applicationDirPath();
+    logos_core_add_plugins_dir(binDir.toUtf8().constData());
+    logos_core_add_plugins_dir(QDir::cleanPath(binDir + "/../lib").toUtf8().constData());
     logos_core_start();
     std::cout << "Logos Core started (modules dir: " << modulesDir.toStdString() << ")" << std::endl;
 

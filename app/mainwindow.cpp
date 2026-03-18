@@ -15,7 +15,7 @@
 #include <QUrl>
 #include <QQmlEngine>
 #include <QQmlContext>
-#include <QQuickStyle>
+#include <QtQuickControls2/QQuickStyle>
 
 #include "logos_api.h"
 #include "logos_api_client.h"

@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets RemoteObjects Quick QuickWidgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets RemoteObjects Quick QuickWidgets)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets RemoteObjects Quick QuickWidgets QuickControls2)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets RemoteObjects Quick QuickWidgets QuickControls2)
 
 if(NOT DEFINED LOGOS_LIBLOGOS_ROOT)
     message(FATAL_ERROR "LOGOS_LIBLOGOS_ROOT must be defined")
@@ -46,6 +46,7 @@ target_link_libraries(logos-standalone PRIVATE
     Qt${QT_VERSION_MAJOR}::RemoteObjects
     Qt${QT_VERSION_MAJOR}::Quick
     Qt${QT_VERSION_MAJOR}::QuickWidgets
+    Qt${QT_VERSION_MAJOR}::QuickControls2
     logos_core
     logos_sdk
 )

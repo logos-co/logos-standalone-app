@@ -28,7 +28,7 @@
             };
           in
           {
-            app = app;
+            inherit app;
             default = app;
           }
         );

@@ -59,6 +59,7 @@ MainWindow::MainWindow(const QString& pluginPath,
 
 void MainWindow::setupUi(const QString& pluginPath, int width, int height)
 {
+    QQuickStyle::setStyle("Fusion");
     QString resolvedPath = QFileInfo(pluginPath).absoluteFilePath();
     QWidget* widget = nullptr;
 

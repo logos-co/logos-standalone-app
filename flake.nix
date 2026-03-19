@@ -2,9 +2,10 @@
     description = "Logos Standalone App — generic Qt shell for loading and testing Logos UI plugins";
 
     inputs = {
-      nixpkgs.follows = "logos-liblogos/nixpkgs";
       logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk";
+      nixpkgs.follows = "logos-cpp-sdk/nixpkgs";
       logos-liblogos.url = "github:logos-co/logos-liblogos";
+      logos-liblogos.inputs.nixpkgs.follows = "logos-cpp-sdk/nixpkgs";
       logos-design-system.url = "github:logos-co/logos-design-system";
     };
 

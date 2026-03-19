@@ -245,7 +245,6 @@
         "nix-bundle-appimage": "nix-bundle-appimage_2",
         "nix-bundle-dir": "nix-bundle-dir_4",
         "nixpkgs": [
-          "logos-liblogos",
           "logos-cpp-sdk",
           "nixpkgs"
         ]
@@ -704,7 +703,7 @@
         "logos-design-system": "logos-design-system",
         "logos-liblogos": "logos-liblogos",
         "nixpkgs": [
-          "logos-liblogos",
+          "logos-cpp-sdk",
           "nixpkgs"
         ]
       }

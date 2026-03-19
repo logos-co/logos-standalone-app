@@ -80,7 +80,7 @@
           if patchelf --print-rpath "$1" 2>/dev/null | grep -q "/build/"; then
             patchelf --remove-rpath "$1" 2>/dev/null || true
           fi
-          if echo "$1" | grep -q "/logos-standalone$"; then
+          if echo "$1" | grep -q "/logos-standalone-app$"; then
             patchelf --set-rpath "$out/lib" "$1" 2>/dev/null || true
           fi
         fi
@@ -119,17 +119,17 @@
 
       mkdir -p $out/bin $out/lib
 
-      cp build/bin/logos-standalone "$out/bin/.logos-standalone-bin"
+      cp build/bin/logos-standalone-app "$out/bin/.logos-standalone-app-bin"
 
       # wrapQtAppsHook does not create shell wrappers on macOS, so we do it manually
       # to ensure QML_IMPORT_PATH is set before the QML engine initialises.
-      cat > "$out/bin/logos-standalone" << EOF
+      cat > "$out/bin/logos-standalone-app" << EOF
 #!/bin/sh
 export QML_IMPORT_PATH="$out/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml\''${QML_IMPORT_PATH:+:\$QML_IMPORT_PATH}"
 export QML2_IMPORT_PATH="\$QML_IMPORT_PATH"
-exec "$out/bin/.logos-standalone-bin" "\$@"
+exec "$out/bin/.logos-standalone-app-bin" "\$@"
 EOF
-      chmod +x "$out/bin/logos-standalone"
+      chmod +x "$out/bin/logos-standalone-app"
 
       [ -f "${logosLiblogos}/bin/logos_host" ] && cp -L "${logosLiblogos}/bin/logos_host" "$out/bin/"
 

@@ -38,7 +38,7 @@
           {
             default = {
               type = "app";
-              program = "${self.packages.${system}.default}/bin/logos-standalone";
+              program = "${self.packages.${system}.default}/bin/logos-standalone-app";
             };
           }
         );

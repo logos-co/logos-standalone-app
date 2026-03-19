@@ -34,13 +34,13 @@ link_directories(
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_executable(logos-standalone
+add_executable(logos-standalone-app
     main.cpp
     mainwindow.cpp
     mainwindow.h
 )
 
-target_link_libraries(logos-standalone PRIVATE
+target_link_libraries(logos-standalone-app PRIVATE
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::RemoteObjects
@@ -52,15 +52,15 @@ target_link_libraries(logos-standalone PRIVATE
 )
 
 if(APPLE)
-    set_target_properties(logos-standalone PROPERTIES
+    set_target_properties(logos-standalone-app PROPERTIES
         INSTALL_RPATH "@executable_path/../lib"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
 elseif(UNIX)
-    set_target_properties(logos-standalone PROPERTIES
+    set_target_properties(logos-standalone-app PROPERTIES
         INSTALL_RPATH "$ORIGIN/../lib"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
 endif()
 
-install(TARGETS logos-standalone RUNTIME DESTINATION bin)
+install(TARGETS logos-standalone-app RUNTIME DESTINATION bin)

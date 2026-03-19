@@ -78,7 +78,7 @@ apps = forAllSystems (system:
     standalone = logos-standalone-app.packages.${system}.default;
     plugin = self.packages.${system}.default;
     run = pkgs.writeShellScript "run-standalone" ''
-      exec ${standalone}/bin/logos-standalone "${plugin}" "$@"
+      exec ${standalone}/bin/logos-standalone-app "${plugin}" "$@"
     '';
   in { default = { type = "app"; program = "${run}"; }; }
 );

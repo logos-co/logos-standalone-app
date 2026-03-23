@@ -64,7 +64,30 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
     QString resolvedPath = QFileInfo(pluginPath).absoluteFilePath();
     QWidget* widget = nullptr;
 
-    // All plugin types (ui and ui_qml) live in a directory.
+    QFileInfo pathInfo(resolvedPath);
+
+    if (pathInfo.isFile()) {
+        // Raw dylib/so/dll passed directly — load it without requiring a metadata file.
+        QPluginLoader loader(resolvedPath);
+        if (!loader.load()) {
+            qWarning() << "Failed to load plugin:" << loader.errorString();
+        } else {
+            QObject* plugin = loader.instance();
+            if (plugin) {
+                LogosAPI* logosAPI = new LogosAPI("standalone", this);
+                bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
+                                                   Qt::DirectConnection,
+                                                   Q_RETURN_ARG(QWidget*, widget),
+                                                   Q_ARG(LogosAPI*, logosAPI));
+                if (!ok || !widget) {
+                    QMetaObject::invokeMethod(plugin, "createWidget",
+                                             Qt::DirectConnection,
+                                             Q_RETURN_ARG(QWidget*, widget));
+                }
+            }
+        }
+    } else {
+    // Package directory path — look for metadata.json / manifest.json.
     // Prefer metadata.json (plain format used by individual plugin repos);
     // fall back to manifest.json (platform-map format used in the standalone plugins/ dir).
     QJsonObject pluginInfo;
@@ -145,6 +168,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                 }
             }
         }
+    }
     }
 
     if (widget) {

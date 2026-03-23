@@ -25,6 +25,8 @@ int main(int argc, char* argv[])
         "Generic standalone Qt shell for loading and testing Logos UI plugins.\n\n"
         "Usage examples:\n"
         "  logos-standalone chat_ui.dylib\n"
+        "  logos-standalone --plugin ./result/lib/accounts_ui.dylib\n"
+        "  logos-standalone --plugin ./result/lib --modules-dir ./modules --load capability_module\n"
         "  logos-standalone --plugin chat_ui.so --modules-dir ./modules --load capability_module --load waku_module --load chat\n"
         "  nix run github:logos-co/logos-standalone-app -- ./result/lib/chat_ui.dylib"
     );

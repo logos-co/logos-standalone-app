@@ -1,4 +1,4 @@
-{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem }:
+{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem, capabilityModuleLgx }:
 
   pkgs.stdenv.mkDerivation rec {
     pname = "logos-standalone-app";
@@ -14,6 +14,7 @@
       logosSdk
       pkgs.patchelf
       pkgs.removeReferencesTo
+      pkgs.python3
     ];
 
     buildInputs = [
@@ -141,6 +142,46 @@ EOF
       # Bundle Logos.Theme and Logos.Controls QML modules from the design system
       if [ -d "${logosDesignSystem}/lib/Logos" ]; then
         cp -r "${logosDesignSystem}/lib/Logos" "$out/lib/"
+      fi
+
+      # Install capability_module from its .lgx package into the directory structure
+      # that logos_core expects: modules/<name>/manifest.json + <library>
+      mkdir -p $out/modules
+      lgx_file=$(find ${capabilityModuleLgx} -name '*.lgx' | head -1)
+      if [ -n "$lgx_file" ]; then
+        extract_dir=$(mktemp -d)
+        tar -xzf "$lgx_file" -C "$extract_dir"
+
+        # Find the platform variant directory
+        variant_dir=""
+        for v in darwin-arm64-dev darwin-amd64-dev linux-amd64-dev linux-arm64-dev \
+                 darwin-arm64 darwin-amd64 linux-amd64 linux-arm64; do
+          if [ -d "$extract_dir/variants/$v" ]; then
+            variant_dir="$extract_dir/variants/$v"
+            break
+          fi
+        done
+
+        if [ -n "$variant_dir" ]; then
+          # Read the module name from the root manifest
+          module_name=$(python3 -c "
+import json; f=open('$extract_dir/manifest.json'); print(json.load(f).get('name',str())); f.close()
+")
+          if [ -n "$module_name" ]; then
+            mkdir -p "$out/modules/$module_name"
+            # Copy the root manifest (has platform-variant main entries) and variant contents
+            cp "$extract_dir/manifest.json" "$out/modules/$module_name/"
+            cp -r "$variant_dir"/* "$out/modules/$module_name/"
+            echo "Installed $module_name from lgx into modules/$module_name/"
+          else
+            echo "Warning: could not read module name from lgx manifest" >&2
+          fi
+        else
+          echo "Warning: no matching platform variant in lgx package" >&2
+        fi
+        rm -rf "$extract_dir"
+      else
+        echo "Warning: no .lgx file found for capability_module" >&2
       fi
 
       runHook postInstall

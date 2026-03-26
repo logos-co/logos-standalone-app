@@ -5,13 +5,45 @@
 #include <QCommandLineOption>
 #include <QDebug>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QIcon>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 extern "C" {
     void logos_core_set_plugins_dir(const char* plugins_dir);
     void logos_core_start();
     void logos_core_cleanup();
     int logos_core_load_plugin(const char* plugin_name);
+}
+
+// Find and read metadata.json for a plugin path.
+// For directories: looks inside the directory.
+// For files: looks in the same directory, then the parent directory.
+// Returns the parsed JSON object and sets pluginDir to the directory containing metadata.json.
+static QJsonObject readPluginMetadata(const QString& pluginPath, QString& pluginDir)
+{
+    QFileInfo info(pluginPath);
+    QString resolved = info.absoluteFilePath();
+    QStringList candidates;
+
+    if (info.isDir()) {
+        candidates << resolved;
+    } else {
+        // For a file like result/lib/foo.dylib, check lib/ then result/
+        QString dir = info.absolutePath();
+        candidates << dir << QFileInfo(dir).absolutePath();
+    }
+
+    for (const QString& dir : candidates) {
+        QFile f(dir + "/metadata.json");
+        if (f.open(QIODevice::ReadOnly)) {
+            pluginDir = dir;
+            return QJsonDocument::fromJson(f.readAll()).object();
+        }
+    }
+    return {};
 }
 
 int main(int argc, char* argv[])
@@ -69,6 +101,8 @@ int main(int argc, char* argv[])
     }
 
     // Resolve modules directory
+    // Default: bundled modules dir alongside the binary (populated by nix build).
+    // Users can still override with --modules-dir for additional / alternative modules.
     QString modulesDir;
     if (parser.isSet(modulesDirOption)) {
         modulesDir = QFileInfo(parser.value(modulesDirOption)).absoluteFilePath();
@@ -97,10 +131,33 @@ int main(int argc, char* argv[])
         }
     }
 
-    // Derive window title from plugin filename if not explicitly set
-    QString title = parser.isSet(titleOption)
-        ? parser.value(titleOption)
-        : QFileInfo(pluginPath).baseName();
+    // Read plugin metadata for title and icon
+    QString metadataDir;
+    QJsonObject metadata = readPluginMetadata(pluginPath, metadataDir);
+
+    // Derive window title: --title flag > metadata "name" > plugin filename
+    QString title;
+    if (parser.isSet(titleOption)) {
+        title = parser.value(titleOption);
+    } else if (!metadata.isEmpty() && metadata.contains("name")) {
+        title = metadata.value("name").toString();
+    } else {
+        title = QFileInfo(pluginPath).baseName();
+    }
+
+    // Set app icon from metadata "icon" field (relative file paths only)
+    if (!metadata.isEmpty() && metadata.contains("icon")) {
+        QString iconValue = metadata.value("icon").toString();
+        if (!iconValue.isEmpty() && !iconValue.startsWith(":/")) {
+            QString iconPath = metadataDir + "/" + iconValue;
+            if (QFileInfo::exists(iconPath)) {
+                app.setWindowIcon(QIcon(iconPath));
+                qInfo() << "Set app icon from metadata:" << iconPath;
+            } else {
+                qInfo() << "Icon file not found:" << iconPath;
+            }
+        }
+    }
 
     int width = parser.value(widthOption).toInt();
     int height = parser.value(heightOption).toInt();

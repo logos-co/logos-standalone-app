@@ -12,7 +12,7 @@ A generic Qt6 shell for loading and testing [Logos](https://logos.co) UI plugins
 
 It supports two plugin formats:
 
-- **Dylib plugins** (`.dylib` / `.so` / `.dll`) — loaded via `QPluginLoader`, must export a `createWidget(LogosAPI*)` method
+- **Dylib plugins** (`.dylib` / `.so` / `.dll`) — loaded via `QPluginLoader`, must export a `createWidget(LogosAPI*)` method. Can be passed as a raw file path or as a directory containing a `metadata.json`.
 - **QML plugins** (`ui_qml`) — loaded into a `QQuickWidget`; the `logos` context property exposes a bridge for calling backend modules from QML
 
 ## Usage
@@ -28,7 +28,7 @@ logos-standalone [options] <plugin-path>
 | `--plugin <path>` | `-p` | Path to the plugin directory (alternative to positional argument) |
 | `--modules-dir <dir>` | `-m` | Directory containing backend modules (default: `../modules` relative to the binary) |
 | `--load <module>` | `-l` | Load a named backend module before showing the UI; can be repeated |
-| `--title <title>` | `-t` | Window title (default: derived from plugin directory name) |
+| `--title <title>` | `-t` | Window title (default: `name` from `metadata.json`, then plugin filename) |
 | `--width <px>` | | Window width in pixels (default: `1024`) |
 | `--height <px>` | | Window height in pixels (default: `768`) |
 | `--help` | `-h` | Show help and exit |
@@ -36,8 +36,14 @@ logos-standalone [options] <plugin-path>
 ### Examples
 
 ```bash
-# Load a dylib plugin (positional argument)
+# Load a dylib plugin directly (raw .dylib/.so file)
+logos-standalone ./result/lib/accounts_ui.dylib
+
+# Load a plugin directory (positional argument)
 logos-standalone ./chat_ui
+
+# Load a dylib with backend modules
+logos-standalone --plugin ./result/lib/accounts_ui.dylib --modules-dir ./modules --load capability_module
 
 # Load a QML plugin with explicit modules
 logos-standalone --plugin ./wallet_ui --load waku_module --load wallet
@@ -51,17 +57,24 @@ nix run github:logos-co/logos-standalone-app -- ./result/lib/chat_ui
 
 ## Plugin Metadata
 
-Each plugin directory must contain a `metadata.json` (or `manifest.json`) file. The app reads it to determine the plugin type and auto-load declared dependencies before the UI is shown.
+When given a plugin directory, the app reads `metadata.json` (or `manifest.json`) to determine the plugin type and auto-load declared dependencies before the UI is shown.
 
 ```json
 {
   "type": "ui_qml",
   "main": "Main.qml",
+  "icon": "icons/calc.png",
   "dependencies": ["waku_module", "chat"]
 }
 ```
 
 For dylib plugins, omit `"type"` (or use `"ui"`) and the app will locate the shared library automatically.
+
+When a raw `.dylib`/`.so`/`.dll` file is passed directly (instead of a directory), the app loads it via `QPluginLoader` without requiring a metadata file. It will still look for a `metadata.json` in the same directory or parent directory to read the `name` (for the window title) and `icon` fields.
+
+### Icon support
+
+If `metadata.json` contains an `"icon"` field with a relative file path, the app sets it as the window icon. The path is resolved relative to the directory containing `metadata.json`.
 
 ## Adding `nix run` to an existing C++ plugin
 
@@ -107,6 +120,7 @@ To use a local checkout of a dependency:
 ```bash
 nix build --override-input logos-liblogos path:../logos-liblogos
 nix build --override-input logos-cpp-sdk   path:../logos-cpp-sdk
+nix build --override-input logos-capability-module path:../logos-capability-module
 ```
 
 ### Manual CMake
@@ -133,11 +147,11 @@ app/
   main.cpp          # CLI argument parsing, core init, module loading
   mainwindow.h/cpp  # Plugin loading (dylib + QML) and window setup
 nix/
-  app.nix           # Nix derivation: build, install, Qt wrapping, library bundling
-flake.nix           # Flake outputs: packages, apps, devShells (4 platforms)
+  app.nix           # Nix derivation: build, install, Qt wrapping, library bundling, capability_module bundling
+flake.nix           # Flake outputs: packages, apps, devShells (4 platforms); inputs include capability_module + nix-bundle-lgx
 ```
 
-The app always loads `capability_module` first (required by all UI plugins), then any modules declared in the plugin's `metadata.json`, then any additional modules passed via `--load`.
+The nix build bundles `capability_module` (via `nix-bundle-lgx`) into the output's `modules/` directory so it is always available at runtime. The app loads `capability_module` first (required by all UI plugins), then any modules declared in the plugin's `metadata.json`, then any additional modules passed via `--load`. The default modules directory is `../modules` relative to the binary; use `--modules-dir` to override.
 
 ## Supported Platforms
 

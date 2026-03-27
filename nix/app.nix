@@ -134,8 +134,9 @@ EOF
 
       [ -f "${logosLiblogos}/bin/logos_host" ] && cp -L "${logosLiblogos}/bin/logos_host" "$out/bin/"
 
-      ls "${logosLiblogos}/lib/"liblogos_core.* >/dev/null 2>&1 && \
-        cp -L "${logosLiblogos}/lib/"liblogos_core.* "$out/lib/" || true
+      for f in "${logosLiblogos}"/lib/*; do
+        [ -f "$f" ] && cp -L "$f" "$out/lib/" || true
+      done
       ls "${logosSdk}/lib/"liblogos_sdk.* >/dev/null 2>&1 && \
         cp -L "${logosSdk}/lib/"liblogos_sdk.* "$out/lib/" || true
 

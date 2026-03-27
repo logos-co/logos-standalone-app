@@ -16,6 +16,7 @@ extern "C" {
     void logos_core_start();
     void logos_core_cleanup();
     int logos_core_load_plugin(const char* plugin_name);
+    int logos_core_load_plugin_with_dependencies(const char* plugin_name);
 }
 
 // Find and read metadata.json for a plugin path.

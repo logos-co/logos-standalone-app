@@ -76,26 +76,26 @@ When a raw `.dylib`/`.so`/`.dll` file is passed directly (instead of a directory
 
 If `metadata.json` contains an `"icon"` field with a relative file path, the app sets it as the window icon. The path is resolved relative to the directory containing `metadata.json`.
 
-## Adding `nix run` to an existing C++ plugin
+## Adding `nix run` to a UI module
 
-Add `logos-standalone-app` as a flake input and an `apps` output to your plugin's `flake.nix`:
-
-```nix
-inputs.logos-standalone-app.url = "github:logos-co/logos-standalone-app";
-```
+`logos-standalone-app` is bundled inside `logos-module-builder`. UI modules (`type: ui` or `type: ui_qml`) automatically get `apps.default` wired up — no separate flake input needed.
 
 ```nix
-apps = forAllSystems (system:
-  let
-    pkgs = import nixpkgs { inherit system; };
-    standalone = logos-standalone-app.packages.${system}.default;
-    plugin = self.packages.${system}.default;
-    run = pkgs.writeShellScript "run-standalone" ''
-      exec ${standalone}/bin/logos-standalone-app "${plugin}" "$@"
-    '';
-  in { default = { type = "app"; program = "${run}"; }; }
-);
+{
+  inputs = {
+    logos-module-builder.url = "github:logos-co/logos-module-builder";
+  };
+
+  outputs = inputs@{ logos-module-builder, ... }:
+    logos-module-builder.lib.mkLogosModule {
+      src = ./.;
+      configFile = ./metadata.json;
+      flakeInputs = inputs;
+    };
+}
 ```
+
+Dependencies listed in `metadata.json` are automatically bundled from their LGX packages and loaded at runtime.
 
 Then build and run:
 
@@ -105,6 +105,8 @@ nix build && nix run .
 # Pass options after --
 nix run . -- --title "My Plugin" --width 1280 --height 800
 ```
+
+To override the standalone app with a custom build, pass `logosStandalone` to `mkLogosModule` or `mkLogosQmlModule`.
 
 ## Building
 

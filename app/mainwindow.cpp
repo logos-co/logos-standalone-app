@@ -1,4 +1,6 @@
 #include "mainwindow.h"
+#include "LogosBridge.h"
+#include "ViewModuleHost.h"
 
 #include <QPluginLoader>
 #include <QFileInfo>
@@ -15,40 +17,16 @@
 #include <QUrl>
 #include <QQmlEngine>
 #include <QQmlContext>
+#include <QEventLoop>
+#include <QTimer>
 #include <QtQuickControls2/QQuickStyle>
 
 #include "logos_api.h"
-#include "logos_api_client.h"
 
 extern "C" {
     int logos_core_load_plugin(const char* plugin_name);
     int logos_core_load_plugin_with_dependencies(const char* plugin_name);
 }
-
-// Bridge exposed to QML as the "logos" context property.
-// Mirrors LogosQmlBridge in logos-app.
-class LogosBridge : public QObject
-{
-    Q_OBJECT
-public:
-    explicit LogosBridge(LogosAPI* api, QObject* parent = nullptr)
-        : QObject(parent), m_api(api) {}
-
-    Q_INVOKABLE QVariant callModule(const QString& moduleName,
-                                    const QString& method,
-                                    const QVariantList& args = {})
-    {
-        if (!m_api) return {};
-        LogosAPIClient* client = m_api->getClient(moduleName);
-        if (!client || !client->isConnected()) return {};
-        return client->invokeRemoteMethod(moduleName, method, args);
-    }
-
-private:
-    LogosAPI* m_api;
-};
-
-#include "mainwindow.moc"
 
 MainWindow::MainWindow(const QString& pluginPath,
                        const QString& title,
@@ -59,6 +37,41 @@ MainWindow::MainWindow(const QString& pluginPath,
 {
     setWindowTitle(title.isEmpty() ? QFileInfo(pluginPath).baseName() : title);
     setupUi(pluginPath, width, height);
+}
+
+QWidget* MainWindow::loadQmlView(const QString& baseDir, const QString& qmlFile, LogosBridge* bridge)
+{
+    auto* quickWidget = new QQuickWidget();
+    quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quickWidget->engine()->setBaseUrl(QUrl::fromLocalFile(baseDir + "/"));
+    quickWidget->rootContext()->setContextProperty("logos", bridge);
+    quickWidget->setSource(QUrl::fromLocalFile(qmlFile));
+
+    if (quickWidget->status() == QQuickWidget::Error) {
+        qWarning() << "Failed to load QML:" << qmlFile;
+        for (const QQmlError& e : quickWidget->errors())
+            qWarning() << e.toString();
+        delete quickWidget;
+        return nullptr;
+    }
+    return quickWidget;
+}
+
+QWidget* MainWindow::loadLegacyWidget(QObject* plugin)
+{
+    LogosAPI* logosAPI = new LogosAPI("standalone", this);
+    QWidget* widget = nullptr;
+    bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
+                                        Qt::DirectConnection,
+                                        Q_RETURN_ARG(QWidget*, widget),
+                                        Q_ARG(LogosAPI*, logosAPI));
+    // Fallback: some plugins expose createWidget() with no args
+    if (!ok || !widget) {
+        QMetaObject::invokeMethod(plugin, "createWidget",
+                                  Qt::DirectConnection,
+                                  Q_RETURN_ARG(QWidget*, widget));
+    }
+    return widget;
 }
 
 void MainWindow::setupUi(const QString& pluginPath, int width, int height)
@@ -76,18 +89,8 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
             qWarning() << "Failed to load plugin:" << loader.errorString();
         } else {
             QObject* plugin = loader.instance();
-            if (plugin) {
-                LogosAPI* logosAPI = new LogosAPI("standalone", this);
-                bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
-                                                   Qt::DirectConnection,
-                                                   Q_RETURN_ARG(QWidget*, widget),
-                                                   Q_ARG(LogosAPI*, logosAPI));
-                if (!ok || !widget) {
-                    QMetaObject::invokeMethod(plugin, "createWidget",
-                                             Qt::DirectConnection,
-                                             Q_RETURN_ARG(QWidget*, widget));
-                }
-            }
+            if (plugin)
+                widget = loadLegacyWidget(plugin);
         }
     } else {
     // Package directory path — look for metadata.json / manifest.json.
@@ -120,58 +123,94 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
             }
         }
 
-        if (type == "ui_qml") {
+        if (type == "ui") {
+            QString viewField = pluginInfo.value("view").toString();
+
+            if (!viewField.isEmpty()) {
+                // View module: process-isolated C++ backend + QML view
+                QString pluginSoPath;
+                QStringList libs = QDir(resolvedPath).entryList(
+                    {"*.dylib", "*.so", "*.dll"}, QDir::Files);
+                if (!libs.isEmpty()) {
+                    pluginSoPath = resolvedPath + "/" + libs.first();
+                }
+
+                QString qmlViewPath = resolvedPath + "/" + viewField;
+                QString moduleName = pluginInfo.value("name").toString();
+                if (moduleName.isEmpty()) {
+                    moduleName = QFileInfo(resolvedPath).baseName();
+                    qWarning() << "View module metadata missing 'name'; defaulting to" << moduleName;
+                }
+
+                if (!QFile::exists(qmlViewPath)) {
+                    qWarning() << "View module QML file not found:" << qmlViewPath;
+                } else if (pluginSoPath.isEmpty()) {
+                    qWarning() << "View module plugin library not found in:" << resolvedPath;
+                } else {
+                    auto* viewHost = new ViewModuleHost(this);
+                    bool spawned = viewHost->spawn(moduleName, pluginSoPath);
+                    if (!spawned) {
+                        qWarning() << "Failed to spawn ui-host for view module" << moduleName;
+                        delete viewHost;
+                    } else {
+                        // Wait for ready signal
+                        QEventLoop waitLoop;
+                        bool hostReady = false;
+                        QTimer timeout;
+                        timeout.setSingleShot(true);
+                        connect(viewHost, &ViewModuleHost::ready, &waitLoop, [&]() {
+                            hostReady = true;
+                            waitLoop.quit();
+                        });
+                        connect(&timeout, &QTimer::timeout, &waitLoop, &QEventLoop::quit);
+                        timeout.start(10000);
+                        waitLoop.exec();
+
+                        if (!hostReady) {
+                            qWarning() << "Timeout waiting for ui-host ready for" << moduleName;
+                            viewHost->stop();
+                            delete viewHost;
+                        } else {
+                            LogosAPI* logosAPI = new LogosAPI("standalone", this);
+                            auto* bridge = new LogosBridge(logosAPI, this);
+                            bridge->setViewModuleSocket(moduleName, viewHost->socketName());
+
+                            widget = loadQmlView(resolvedPath, qmlViewPath, bridge);
+                            if (!widget) {
+                                viewHost->stop();
+                                delete viewHost;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Legacy dylib plugin (type "ui" without "view" field)
+                QStringList libs = QDir(resolvedPath).entryList(
+                    {"*.dylib", "*.so", "*.dll"}, QDir::Files);
+                if (libs.isEmpty()) {
+                    qWarning() << "No shared library found in plugin directory:" << resolvedPath;
+                } else {
+                    QString dylibPath = resolvedPath + "/" + libs.first();
+                    QPluginLoader loader(dylibPath);
+                    if (!loader.load()) {
+                        qWarning() << "Failed to load plugin:" << loader.errorString();
+                    } else {
+                        QObject* plugin = loader.instance();
+                        if (plugin)
+                            widget = loadLegacyWidget(plugin);
+                    }
+                }
+            }
+        } else if (type == "ui_qml") {
             // QML plugin — "main" is a plain filename string in metadata.json.
             QString mainFile = pluginInfo.value("main").toString("Main.qml");
 
             LogosAPI* logosAPI = new LogosAPI("standalone", this);
             auto* bridge = new LogosBridge(logosAPI, this);
 
-            auto* quickWidget = new QQuickWidget();
-            quickWidget->setMinimumSize(800, 600);
-            quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
-            quickWidget->engine()->setBaseUrl(QUrl::fromLocalFile(resolvedPath + "/"));
-            quickWidget->rootContext()->setContextProperty("logos", bridge);
-            quickWidget->setSource(QUrl::fromLocalFile(resolvedPath + "/" + mainFile));
-
-            if (quickWidget->status() == QQuickWidget::Error) {
-                qWarning() << "Failed to load QML plugin:" << resolvedPath;
-                for (const QQmlError& e : quickWidget->errors())
-                    qWarning() << e.toString();
-                delete quickWidget;
-            } else {
-                widget = quickWidget;
-            }
+            widget = loadQmlView(resolvedPath, resolvedPath + "/" + mainFile, bridge);
         } else {
-            // Dylib plugin — find the shared library file inside the directory.
-            QStringList libs = QDir(resolvedPath).entryList(
-                {"*.dylib", "*.so", "*.dll"}, QDir::Files);
-            if (libs.isEmpty()) {
-                qWarning() << "No shared library found in plugin directory:" << resolvedPath;
-            } else {
-                QString dylibPath = resolvedPath + "/" + libs.first();
-                QPluginLoader loader(dylibPath);
-                if (!loader.load()) {
-                    qWarning() << "Failed to load plugin:" << loader.errorString();
-                } else {
-                    QObject* plugin = loader.instance();
-                    if (plugin) {
-                        // Heap-allocate LogosAPI parented to this so it outlives setupUi()
-                        // and remains valid for the lifetime of any backend that stores it.
-                        LogosAPI* logosAPI = new LogosAPI("standalone", this);
-                        bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
-                                                           Qt::DirectConnection,
-                                                           Q_RETURN_ARG(QWidget*, widget),
-                                                           Q_ARG(LogosAPI*, logosAPI));
-                        // Fallback: some plugins expose createWidget() with no args
-                        if (!ok || !widget) {
-                            QMetaObject::invokeMethod(plugin, "createWidget",
-                                                     Qt::DirectConnection,
-                                                     Q_RETURN_ARG(QWidget*, widget));
-                        }
-                    }
-                }
-            }
+            qWarning() << "Unknown plugin type:" << type << "in" << resolvedPath;
         }
     }
     }

@@ -10,10 +10,11 @@ A generic Qt6 shell for loading and testing [Logos](https://logos.co) UI plugins
 2. Loads the backend modules a plugin declares as dependencies
 3. Displays the plugin's UI in a window
 
-It supports two plugin formats:
+It supports three plugin formats:
 
-- **Dylib plugins** (`.dylib` / `.so` / `.dll`) — loaded via `QPluginLoader`, must export a `createWidget(LogosAPI*)` method. Can be passed as a raw file path or as a directory containing a `metadata.json`.
-- **QML plugins** (`ui_qml`) — loaded into a `QQuickWidget`; the `logos` context property exposes a bridge for calling backend modules from QML
+- **View modules** (`type: "ui"` with `"view"` field) — process-isolated C++ backend + QML view. The C++ plugin runs in a separate `ui-host` process; the QML view is loaded in the standalone app and communicates with the backend via `logos.callModuleAsync()`.
+- **QML plugins** (`type: "ui_qml"`) — pure QML UI loaded into a `QQuickWidget`; the `logos` context property exposes a bridge for calling backend modules from QML.
+- **Legacy dylib plugins** (`type: "ui"`, no `"view"` field) — loaded via `QPluginLoader`, must export a `createWidget(LogosAPI*)` method. Can be passed as a raw file path or as a directory containing a `metadata.json`.
 
 ## Usage
 
@@ -36,17 +37,17 @@ logos-standalone [options] <plugin-path>
 ### Examples
 
 ```bash
-# Load a dylib plugin directly (raw .dylib/.so file)
+# Load a view module directory (C++ backend + QML view)
+logos-standalone ./calc_ui_cpp
+
+# Load a pure QML plugin directory
+logos-standalone ./wallet_ui
+
+# Load a legacy dylib plugin directly (raw .dylib/.so file)
 logos-standalone ./result/lib/accounts_ui.dylib
 
-# Load a plugin directory (positional argument)
-logos-standalone ./chat_ui
-
-# Load a dylib with backend modules
-logos-standalone --plugin ./result/lib/accounts_ui.dylib --modules-dir ./modules --load capability_module
-
-# Load a QML plugin with explicit modules
-logos-standalone --plugin ./wallet_ui --load waku_module --load wallet
+# Load a plugin directory with backend modules
+logos-standalone --plugin ./chat_ui --modules-dir ./modules --load capability_module
 
 # Override the modules directory
 logos-standalone --plugin ./chat_ui --modules-dir ./result/modules
@@ -59,18 +60,39 @@ nix run github:logos-co/logos-standalone-app -- ./result/lib/chat_ui
 
 When given a plugin directory, the app reads `metadata.json` (or `manifest.json`) to determine the plugin type and auto-load declared dependencies before the UI is shown.
 
+**View module** (C++ backend + QML view, process-isolated):
+```json
+{
+  "name": "calc_ui",
+  "type": "ui",
+  "view": "qml/Main.qml",
+  "dependencies": ["calc_module"]
+}
+```
+
+**Pure QML plugin**:
 ```json
 {
   "type": "ui_qml",
   "main": "Main.qml",
-  "icon": "icons/calc.png",
   "dependencies": ["waku_module", "chat"]
 }
 ```
 
-For dylib plugins, omit `"type"` (or use `"ui"`) and the app will locate the shared library automatically.
+**Legacy dylib plugin** (`type: "ui"` without `"view"`, or a raw `.dylib`/`.so` file):
+```json
+{
+  "type": "ui",
+  "dependencies": ["capability_module"]
+}
+```
 
-When a raw `.dylib`/`.so`/`.dll` file is passed directly (instead of a directory), the app loads it via `QPluginLoader` without requiring a metadata file. It will still look for a `metadata.json` in the same directory or parent directory to read the `name` (for the window title) and `icon` fields.
+The app determines the loading strategy from these fields:
+1. `type: "ui"` + `"view"` present → view module (spawn `ui-host`, load QML view)
+2. `type: "ui"` without `"view"` → legacy dylib (load via `QPluginLoader`, call `createWidget`)
+3. `type: "ui_qml"` → pure QML (load into `QQuickWidget`)
+
+When a raw `.dylib`/`.so`/`.dll` file is passed directly (instead of a directory), the app loads it via `QPluginLoader` without requiring a metadata file.
 
 ### Icon support
 
@@ -78,21 +100,35 @@ If `metadata.json` contains an `"icon"` field with a relative file path, the app
 
 ## Adding `nix run` to a UI module
 
-`logos-standalone-app` is bundled inside `logos-module-builder`. UI modules (`type: ui` or `type: ui_qml`) automatically get `apps.default` wired up — no separate flake input needed.
+`logos-standalone-app` is bundled inside `logos-module-builder`. UI modules automatically get `apps.default` wired up — no separate flake input needed. Use the builder that matches your module type:
+
+| Module type | Builder | When to use |
+|-------------|---------|-------------|
+| C++ + QML view | `mkViewModule` | Process-isolated UI: C++ backend in `ui-host`, QML view in host app |
+| Pure QML | `mkLogosQmlModule` | QML-only UI, no C++ compilation |
+| Legacy C++ widget | `mkLogosModule` | C++ plugin with `createWidget()` (legacy pattern) |
 
 ```nix
-{
-  inputs = {
-    logos-module-builder.url = "github:logos-co/logos-module-builder";
-  };
+# View module (C++ + QML)
+logos-module-builder.lib.mkViewModule {
+  src = ./.;
+  configFile = ./metadata.json;
+  flakeInputs = inputs;
+};
 
-  outputs = inputs@{ logos-module-builder, ... }:
-    logos-module-builder.lib.mkLogosModule {
-      src = ./.;
-      configFile = ./metadata.json;
-      flakeInputs = inputs;
-    };
-}
+# Pure QML module
+logos-module-builder.lib.mkLogosQmlModule {
+  src = ./.;
+  configFile = ./metadata.json;
+  flakeInputs = inputs;
+};
+
+# Legacy C++ widget module (type: "ui", no "view" field)
+logos-module-builder.lib.mkLogosModule {
+  src = ./.;
+  configFile = ./metadata.json;
+  flakeInputs = inputs;
+};
 ```
 
 Dependencies listed in `metadata.json` are automatically bundled from their LGX packages and loaded at runtime.
@@ -106,7 +142,7 @@ nix build && nix run .
 nix run . -- --title "My Plugin" --width 1280 --height 800
 ```
 
-To override the standalone app with a custom build, pass `logosStandalone` to `mkLogosModule` or `mkLogosQmlModule`.
+To override the standalone app with a custom build, pass `logosStandalone` to `mkViewModule`, `mkLogosModule`, or `mkLogosQmlModule`.
 
 ## Building
 

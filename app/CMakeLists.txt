@@ -38,6 +38,10 @@ add_executable(logos-standalone-app
     main.cpp
     mainwindow.cpp
     mainwindow.h
+    LogosBridge.cpp
+    LogosBridge.h
+    ViewModuleHost.cpp
+    ViewModuleHost.h
 )
 
 target_link_libraries(logos-standalone-app PRIVATE
@@ -64,3 +68,32 @@ elseif(UNIX)
 endif()
 
 install(TARGETS logos-standalone-app RUNTIME DESTINATION bin)
+
+# ── ui-host: lightweight process host for view modules ───────────────────────
+add_executable(ui-host
+    ui-host/main.cpp
+)
+
+target_link_libraries(ui-host PRIVATE
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::RemoteObjects
+    logos_sdk
+)
+
+set_target_properties(ui-host PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+if(APPLE)
+    set_target_properties(ui-host PROPERTIES
+        INSTALL_RPATH "@executable_path/../lib"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+elseif(UNIX)
+    set_target_properties(ui-host PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+endif()
+
+install(TARGETS ui-host RUNTIME DESTINATION bin)

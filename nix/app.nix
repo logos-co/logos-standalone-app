@@ -134,6 +134,12 @@ EOF
 
       [ -f "${logosLiblogos}/bin/logos_host" ] && cp -L "${logosLiblogos}/bin/logos_host" "$out/bin/"
 
+      # Ship ui-host binary for view module support (process-isolated UI plugins)
+      if [ -f "build/bin/ui-host" ]; then
+        cp build/bin/ui-host "$out/bin/"
+        echo "Installed ui-host binary for view module support"
+      fi
+
       for f in "${logosLiblogos}"/lib/*; do
         [ -f "$f" ] && cp -L "$f" "$out/lib/" || true
       done

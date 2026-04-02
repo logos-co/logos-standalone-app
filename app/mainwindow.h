@@ -2,6 +2,8 @@
 
 #include <QMainWindow>
 
+class LogosBridge;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -16,4 +18,6 @@ public:
 
 private:
     void setupUi(const QString& pluginPath, int width, int height);
+    QWidget* loadQmlView(const QString& baseDir, const QString& qmlFile, LogosBridge* bridge);
+    QWidget* loadLegacyWidget(QObject* plugin);
 };

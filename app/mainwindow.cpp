@@ -1,5 +1,5 @@
 #include "mainwindow.h"
-#include "LogosBridge.h"
+#include "LogosQmlBridge.h"
 #include "ViewModuleHost.h"
 
 #include <QPluginLoader>
@@ -39,7 +39,7 @@ MainWindow::MainWindow(const QString& pluginPath,
     setupUi(pluginPath, width, height);
 }
 
-QWidget* MainWindow::loadQmlView(const QString& baseDir, const QString& qmlFile, LogosBridge* bridge)
+QWidget* MainWindow::loadQmlView(const QString& baseDir, const QString& qmlFile, LogosQmlBridge* bridge)
 {
     auto* quickWidget = new QQuickWidget();
     quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
@@ -172,8 +172,25 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                             delete viewHost;
                         } else {
                             LogosAPI* logosAPI = new LogosAPI("standalone", this);
-                            auto* bridge = new LogosBridge(logosAPI, this);
+                            auto* bridge = new LogosQmlBridge(logosAPI, this);
                             bridge->setViewModuleSocket(moduleName, viewHost->socketName());
+
+                            // By convention each view module ships a
+                            // typed replica factory plugin alongside its
+                            // backend plugin, named
+                            // "<moduleName>_replica_factory.{so,dylib}".
+                            // If present, register it with the bridge so
+                            // logos.module("<moduleName>") in QML returns
+                            // a statically-typed replica.
+                            for (const QString& suffix : { QStringLiteral(".dylib"),
+                                                           QStringLiteral(".so") }) {
+                                QString factoryPath = resolvedPath + "/"
+                                    + moduleName + "_replica_factory" + suffix;
+                                if (QFile::exists(factoryPath)) {
+                                    bridge->setViewReplicaPlugin(moduleName, factoryPath);
+                                    break;
+                                }
+                            }
 
                             widget = loadQmlView(resolvedPath, qmlViewPath, bridge);
                             if (!widget) {
@@ -206,7 +223,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
             QString mainFile = pluginInfo.value("main").toString("Main.qml");
 
             LogosAPI* logosAPI = new LogosAPI("standalone", this);
-            auto* bridge = new LogosBridge(logosAPI, this);
+            auto* bridge = new LogosQmlBridge(logosAPI, this);
 
             widget = loadQmlView(resolvedPath, resolvedPath + "/" + mainFile, bridge);
         } else {

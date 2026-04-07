@@ -17,19 +17,26 @@ if(NOT DEFINED LOGOS_CPP_SDK_ROOT)
     message(FATAL_ERROR "LOGOS_CPP_SDK_ROOT must be defined")
 endif()
 
-message(STATUS "logos-liblogos : ${LOGOS_LIBLOGOS_ROOT}")
-message(STATUS "logos-cpp-sdk  : ${LOGOS_CPP_SDK_ROOT}")
+if(NOT DEFINED LOGOS_VIEW_MODULE_RUNTIME_ROOT)
+    message(FATAL_ERROR "LOGOS_VIEW_MODULE_RUNTIME_ROOT must be defined")
+endif()
+
+message(STATUS "logos-liblogos   : ${LOGOS_LIBLOGOS_ROOT}")
+message(STATUS "logos-cpp-sdk    : ${LOGOS_CPP_SDK_ROOT}")
+message(STATUS "logos-view-module-runtime : ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}")
 
 include_directories(
     ${LOGOS_LIBLOGOS_ROOT}/include
     ${LOGOS_CPP_SDK_ROOT}/include
     ${LOGOS_CPP_SDK_ROOT}/include/cpp
     ${LOGOS_CPP_SDK_ROOT}/include/core
+    ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}/include
 )
 
 link_directories(
     ${LOGOS_LIBLOGOS_ROOT}/lib
     ${LOGOS_CPP_SDK_ROOT}/lib
+    ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}/lib
 )
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -38,10 +45,6 @@ add_executable(logos-standalone-app
     main.cpp
     mainwindow.cpp
     mainwindow.h
-    LogosBridge.cpp
-    LogosBridge.h
-    ViewModuleHost.cpp
-    ViewModuleHost.h
 )
 
 target_link_libraries(logos-standalone-app PRIVATE
@@ -51,6 +54,7 @@ target_link_libraries(logos-standalone-app PRIVATE
     Qt${QT_VERSION_MAJOR}::Quick
     Qt${QT_VERSION_MAJOR}::QuickWidgets
     Qt${QT_VERSION_MAJOR}::QuickControls2
+    logos_view_module_runtime
     logos_core
     logos_sdk
 )
@@ -68,32 +72,3 @@ elseif(UNIX)
 endif()
 
 install(TARGETS logos-standalone-app RUNTIME DESTINATION bin)
-
-# ── ui-host: lightweight process host for view modules ───────────────────────
-add_executable(ui-host
-    ui-host/main.cpp
-)
-
-target_link_libraries(ui-host PRIVATE
-    Qt${QT_VERSION_MAJOR}::Core
-    Qt${QT_VERSION_MAJOR}::RemoteObjects
-    logos_sdk
-)
-
-set_target_properties(ui-host PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-
-if(APPLE)
-    set_target_properties(ui-host PROPERTIES
-        INSTALL_RPATH "@executable_path/../lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
-elseif(UNIX)
-    set_target_properties(ui-host PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
-endif()
-
-install(TARGETS ui-host RUNTIME DESTINATION bin)

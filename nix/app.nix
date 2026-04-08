@@ -1,4 +1,4 @@
-{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem, capabilityModuleLgx }:
+{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, capabilityModuleLgx }:
 
   pkgs.stdenv.mkDerivation rec {
     pname = "logos-standalone-app";
@@ -104,7 +104,8 @@
         -DCMAKE_INSTALL_RPATH="" \
         -DCMAKE_SKIP_BUILD_RPATH=TRUE \
         -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos} \
-        -DLOGOS_CPP_SDK_ROOT=$(pwd)/logos-cpp-sdk
+        -DLOGOS_CPP_SDK_ROOT=$(pwd)/logos-cpp-sdk \
+        -DLOGOS_VIEW_MODULE_RUNTIME_ROOT=${logosViewModuleRuntime}
 
       runHook postConfigure
     '';
@@ -134,10 +135,10 @@ EOF
 
       [ -f "${logosLiblogos}/bin/logos_host" ] && cp -L "${logosLiblogos}/bin/logos_host" "$out/bin/"
 
-      # Ship ui-host binary for view module support (process-isolated UI plugins)
-      if [ -f "build/bin/ui-host" ]; then
-        cp build/bin/ui-host "$out/bin/"
-        echo "Installed ui-host binary for view module support"
+      # Ship ui-host binary from logos-view-module-runtime for view module support
+      if [ -f "${logosViewModuleRuntime}/bin/ui-host" ]; then
+        cp "${logosViewModuleRuntime}/bin/ui-host" "$out/bin/"
+        echo "Installed ui-host binary from logos-view-module-runtime"
       fi
 
       for f in "${logosLiblogos}"/lib/*; do
@@ -145,6 +146,15 @@ EOF
       done
       ls "${logosSdk}/lib/"liblogos_sdk.* >/dev/null 2>&1 && \
         cp -L "${logosSdk}/lib/"liblogos_sdk.* "$out/lib/" || true
+
+      # Copy any shared libraries from logos-view-module-runtime so the
+      # packaged app stays self-contained if the runtime is ever built as a
+      # shared lib. Static (.a) builds are effectively a no-op.
+      if [ -d "${logosViewModuleRuntime}/lib" ]; then
+        for f in "${logosViewModuleRuntime}"/lib/liblogos_view_module_runtime.*; do
+          [ -f "$f" ] && cp -L "$f" "$out/lib/" || true
+        done
+      fi
 
       # Bundle Logos.Theme and Logos.Controls QML modules from the design system
       if [ -d "${logosDesignSystem}/lib/Logos" ]; then

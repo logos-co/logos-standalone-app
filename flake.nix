@@ -11,11 +11,14 @@
       logos-capability-module.url = "github:logos-co/logos-capability-module";
       logos-capability-module.inputs.nixpkgs.follows = "logos-nix/nixpkgs";
       logos-capability-module.inputs.logos-cpp-sdk.follows = "logos-cpp-sdk";
+      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime";
+      logos-view-module-runtime.inputs.nixpkgs.follows = "logos-nix/nixpkgs";
+      logos-view-module-runtime.inputs.logos-cpp-sdk.follows = "logos-cpp-sdk";
       nix-bundle-lgx.url = "github:logos-co/nix-bundle-lgx";
       nix-bundle-lgx.inputs.nixpkgs.follows = "logos-nix/nixpkgs";
     };
 
-    outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-liblogos, logos-design-system, logos-capability-module, nix-bundle-lgx }:
+    outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-liblogos, logos-design-system, logos-capability-module, logos-view-module-runtime, nix-bundle-lgx }:
       let
         systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
         forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
@@ -25,15 +28,16 @@
           logosLiblogos = logos-liblogos.packages.${system}.default;
           logosDesignSystem = logos-design-system.packages.${system}.default;
           logosCapabilityModule = logos-capability-module.packages.${system}.default;
+          logosViewModuleRuntime = logos-view-module-runtime.packages.${system}.default;
           bundleLgx = nix-bundle-lgx.bundlers.${system}.default;
         });
       in
       {
-        packages = forAllSystems ({ pkgs, logosSdk, logosLiblogos, logosDesignSystem, logosCapabilityModule, bundleLgx, ... }:
+        packages = forAllSystems ({ pkgs, logosSdk, logosLiblogos, logosDesignSystem, logosCapabilityModule, logosViewModuleRuntime, bundleLgx, ... }:
           let
             capabilityModuleLgx = bundleLgx logosCapabilityModule;
             app = import ./nix/app.nix {
-              inherit pkgs logosSdk logosLiblogos logosDesignSystem capabilityModuleLgx;
+              inherit pkgs logosSdk logosLiblogos logosDesignSystem logosViewModuleRuntime capabilityModuleLgx;
               src = ./.;
             };
           in
@@ -52,7 +56,7 @@
           }
         );
 
-        devShells = forAllSystems ({ pkgs, logosSdk, logosLiblogos, ... }: {
+        devShells = forAllSystems ({ pkgs, logosSdk, logosLiblogos, logosViewModuleRuntime, ... }: {
           default = pkgs.mkShell {
             nativeBuildInputs = [ pkgs.cmake pkgs.ninja pkgs.pkg-config ];
             buildInputs = [
@@ -65,6 +69,7 @@
             shellHook = ''
               export LOGOS_CPP_SDK_ROOT="${logosSdk}"
               export LOGOS_LIBLOGOS_ROOT="${logosLiblogos}"
+              export LOGOS_VIEW_MODULE_RUNTIME_ROOT="${logosViewModuleRuntime}"
               echo "logos-standalone-app dev shell"
             '';
           };

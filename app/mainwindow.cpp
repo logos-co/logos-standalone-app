@@ -124,32 +124,24 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
         }
 
         if (type == "ui_qml") {
-            // Unified QML view module. The "view" field is the QML entry point.
-            // The "main" field is OPTIONAL: when present it's a backend C++ plugin
-            // that runs in an isolated ui-host process; when absent the QML loads
-            // directly in-process. Legacy ui_qml modules (no "view", "main" is
-            // a .qml filename) are also supported.
+            // ui_qml contract: "view" (required) = QML entry point;
+            // "main" (optional) = backend Qt plugin lib. If a backend lib is
+            // shipped alongside, run it in an isolated ui-host process and
+            // bridge to the QML view; otherwise load the QML directly.
             QString viewField = pluginInfo.value("view").toString();
-            QString mainField = pluginInfo.value("main").toString();
-
-            // Discover a backend plugin library, if any, in the install dir.
+            QString qmlViewPath;
             QString pluginSoPath;
-            QStringList libs = QDir(resolvedPath).entryList(
-                {"*.dylib", "*.so", "*.dll"}, QDir::Files);
-            if (!libs.isEmpty()) {
-                pluginSoPath = resolvedPath + "/" + libs.first();
+            if (viewField.isEmpty()) {
+                qWarning() << "ui_qml module missing required 'view' field:" << resolvedPath;
+            } else {
+                // Discover a backend plugin library, if any, in the install dir.
+                QStringList libs = QDir(resolvedPath).entryList(
+                    {"*.dylib", "*.so", "*.dll"}, QDir::Files);
+                if (!libs.isEmpty()) {
+                    pluginSoPath = resolvedPath + "/" + libs.first();
+                }
+                qmlViewPath = resolvedPath + "/" + viewField;
             }
-
-            // Resolve the QML entry point: prefer "view"; fall back to "main"
-            // (legacy ui_qml convention where "main" was the QML filename).
-            // TODO: drop the "main is .qml" fallback once all modules use the
-            // canonical contract: "main" = Qt plugin lib (or absent), "view" = QML path.
-            QString qmlRel = !viewField.isEmpty()
-                ? viewField
-                : (mainField.endsWith(QStringLiteral(".qml"), Qt::CaseInsensitive)
-                    ? mainField
-                    : QStringLiteral("Main.qml"));
-            QString qmlViewPath = resolvedPath + "/" + qmlRel;
 
             QString moduleName = pluginInfo.value("name").toString();
             if (moduleName.isEmpty()) {

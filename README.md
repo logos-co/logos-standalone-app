@@ -178,6 +178,68 @@ cmake --build build
 nix develop   # sets LOGOS_CPP_SDK_ROOT and LOGOS_LIBLOGOS_ROOT automatically
 ```
 
+## QML Inspector
+
+The app includes an optional QML Inspector server ([logos-qt-mcp](https://github.com/logos-co/logos-qt-mcp)) that enables runtime UI introspection over TCP. This allows AI assistants (via MCP) and test frameworks to interact with the running UI — clicking buttons, reading properties, taking screenshots, etc.
+
+The inspector is **enabled by default** in non-release builds. In nix builds it is controlled by the `enableInspector` parameter (default: `true`).
+
+### Using the inspector interactively
+
+```bash
+# Build the app (inspector enabled by default)
+nix build
+
+# Build the MCP server + test framework (one-time)
+nix build .#logos-qt-mcp -o result-mcp
+
+# Run the app with a plugin — inspector starts on localhost:3768
+./result/bin/logos-standalone-app ./my-plugin/result/lib
+
+# Connect Claude Code via .mcp.json (automatic when working from this directory)
+# Or connect any MCP client to localhost:3768
+```
+
+The inspector port defaults to `3768` and can be changed via the `QML_INSPECTOR_PORT` environment variable.
+
+### Available MCP tools
+
+| Tool | Description |
+|------|-------------|
+| `qml_screenshot` | Capture a screenshot of the current app state |
+| `qml_find_and_click` | Find a UI element by text and click it |
+| `qml_find_by_type` | Locate elements by QML type name |
+| `qml_find_by_property` | Locate elements by property value |
+| `qml_list_interactive` | List all clickable/interactive elements |
+| `qml_get_tree` | Get the full QML element tree |
+
+### Disabling the inspector
+
+```bash
+# Via CMake
+cmake -DENABLE_QML_INSPECTOR=OFF ...
+
+# Via nix (pass enableInspector = false to nix/app.nix)
+```
+
+### Plugin integration tests (`lib.mkPluginTest`)
+
+logos-standalone-app exposes a reusable test builder that UI modules can use to run headless integration tests. This is wired up automatically by `logos-module-builder` — any UI module with `.mjs` files in its `tests/` directory gets a `nix build .#integration-test` output for free.
+
+If you need to use it directly:
+
+```nix
+# In a module's flake.nix
+integration-test = logos-standalone-app.lib.${system}.mkPluginTest {
+  inherit pkgs;
+  pluginPkg = myModulePackage;
+  testFiles = [ ./tests/smoke.mjs ./tests/interactions.mjs ];
+  name = "my-module-integration-test";
+};
+```
+
+The builder launches the plugin in logos-standalone-app with `QT_QPA_PLATFORM=offscreen`, connects to the QML inspector, and runs each test file sequentially.
+
 ## Architecture
 
 ```
@@ -186,7 +248,8 @@ app/
   mainwindow.h/cpp  # Plugin loading (dylib + QML) and window setup
 nix/
   app.nix           # Nix derivation: build, install, Qt wrapping, library bundling, capability_module bundling
-flake.nix           # Flake outputs: packages, apps, devShells (4 platforms); inputs include capability_module + nix-bundle-lgx
+  mkPluginTest.nix  # Reusable integration test builder for UI plugins
+flake.nix           # Flake outputs: packages, apps, lib, devShells (4 platforms)
 ```
 
 The nix build bundles `capability_module` (via `nix-bundle-lgx`) into the output's `modules/` directory so it is always available at runtime. The app loads `capability_module` first (required by all UI plugins), then any modules declared in the plugin's `metadata.json`, then any additional modules passed via `--load`. The default modules directory is `../modules` relative to the binary; use `--modules-dir` to override.

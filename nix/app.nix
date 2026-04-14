@@ -1,4 +1,4 @@
-{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, capabilityModuleLgx }:
+{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, logosQtMcp ? null, capabilityModuleLgx, enableInspector ? (logosQtMcp != null) }:
 
   pkgs.stdenv.mkDerivation rec {
     pname = "logos-standalone-app";
@@ -21,6 +21,7 @@
       pkgs.qt6.qtbase
       pkgs.qt6.qtremoteobjects
       pkgs.qt6.qtdeclarative
+      pkgs.qt6.qtwebsockets
       pkgs.zstd
       pkgs.krb5
       pkgs.abseil-cpp
@@ -66,6 +67,12 @@
     preConfigure = ''
       export MACOSX_DEPLOYMENT_TARGET=12.0
 
+      ${pkgs.lib.optionalString (enableInspector && logosQtMcp != null) ''
+        echo "Copying logos-qt-mcp source for inspector..."
+        mkdir -p ./logos-qt-mcp
+        cp -r ${logosQtMcp}/* ./logos-qt-mcp/
+      ''}
+
       mkdir -p logos-cpp-sdk/include/cpp logos-cpp-sdk/include/core logos-cpp-sdk/lib
       cp -r ${logosSdk}/include/cpp/* logos-cpp-sdk/include/cpp/
       cp -r ${logosSdk}/include/core/* logos-cpp-sdk/include/core/
@@ -105,7 +112,9 @@
         -DCMAKE_SKIP_BUILD_RPATH=TRUE \
         -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos} \
         -DLOGOS_CPP_SDK_ROOT=$(pwd)/logos-cpp-sdk \
-        -DLOGOS_VIEW_MODULE_RUNTIME_ROOT=${logosViewModuleRuntime}
+        -DLOGOS_VIEW_MODULE_RUNTIME_ROOT=${logosViewModuleRuntime} \
+        -DENABLE_QML_INSPECTOR=${if enableInspector then "ON" else "OFF"} \
+        ${pkgs.lib.optionalString (enableInspector && logosQtMcp != null) "-DLOGOS_QT_MCP_ROOT=$(pwd)/logos-qt-mcp"}
 
       runHook postConfigure
     '';

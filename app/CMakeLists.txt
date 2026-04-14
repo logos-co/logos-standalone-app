@@ -6,8 +6,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets RemoteObjects Quick QuickWidgets QuickControls2)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets RemoteObjects Quick QuickWidgets QuickControls2)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets RemoteObjects Quick QuickWidgets QuickControls2 Network)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets RemoteObjects Quick QuickWidgets QuickControls2 Network)
+
+# QML Inspector (Qt DevTools-like inspection over TCP)
+# Disabled by default. Pass -DENABLE_QML_INSPECTOR=ON to enable.
+# The nix build enables it automatically when logos-qt-mcp is available.
+if(NOT DEFINED ENABLE_QML_INSPECTOR)
+    set(ENABLE_QML_INSPECTOR OFF)
+endif()
+
+if(ENABLE_QML_INSPECTOR)
+    if(NOT DEFINED LOGOS_QT_MCP_ROOT)
+        get_filename_component(LOGOS_QT_MCP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../logos-qt-mcp" REALPATH)
+    endif()
+    if(NOT EXISTS "${LOGOS_QT_MCP_ROOT}/qt-plugin/CMakeLists.txt")
+        message(FATAL_ERROR "logos-qt-mcp not found at ${LOGOS_QT_MCP_ROOT}. "
+                            "Set LOGOS_QT_MCP_ROOT or clone https://github.com/logos-co/logos-qt-mcp")
+    endif()
+    add_subdirectory("${LOGOS_QT_MCP_ROOT}/qt-plugin" "${CMAKE_CURRENT_BINARY_DIR}/qml-inspector")
+endif()
 
 if(NOT DEFINED LOGOS_LIBLOGOS_ROOT)
     message(FATAL_ERROR "LOGOS_LIBLOGOS_ROOT must be defined")
@@ -47,6 +65,10 @@ add_executable(logos-standalone-app
     mainwindow.h
 )
 
+if(ENABLE_QML_INSPECTOR)
+    target_compile_definitions(logos-standalone-app PRIVATE ENABLE_QML_INSPECTOR)
+endif()
+
 target_link_libraries(logos-standalone-app PRIVATE
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Widgets
@@ -54,9 +76,11 @@ target_link_libraries(logos-standalone-app PRIVATE
     Qt${QT_VERSION_MAJOR}::Quick
     Qt${QT_VERSION_MAJOR}::QuickWidgets
     Qt${QT_VERSION_MAJOR}::QuickControls2
+    Qt${QT_VERSION_MAJOR}::Network
     logos_view_module_runtime
     logos_core
     logos_sdk
+    $<$<BOOL:${ENABLE_QML_INSPECTOR}>:qml-inspector>
 )
 
 if(APPLE)

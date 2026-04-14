@@ -723,7 +723,6 @@
       "inputs": {
         "logos-nix": "logos-nix_18",
         "nixpkgs": [
-          "logos-qt-mcp",
           "logos-nix",
           "nixpkgs"
         ]
@@ -754,11 +753,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1775835902,
-        "narHash": "sha256-jQ1ZJis3stGgj1jQvQI0JuxPpzeZtilAwLEUVqT0lkA=",
+        "lastModified": 1776172218,
+        "narHash": "sha256-OM1gWX2GgAPNox8jA2pKDOWWXoIAiw/XEp0WJe19nc0=",
         "owner": "logos-co",
         "repo": "logos-view-module-runtime",
-        "rev": "b5799b743ef92afefacb8510a2935fc9585c308d",
+        "rev": "1fde7d43bb2d7382045aa5da6bf442994d0cf5cf",
         "type": "github"
       },
       "original": {

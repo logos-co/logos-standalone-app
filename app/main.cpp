@@ -1,5 +1,9 @@
 #include "mainwindow.h"
 
+#ifdef ENABLE_QML_INSPECTOR
+#include "inspectorserver.h"
+#endif
+
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QCommandLineOption>
@@ -165,6 +169,11 @@ int main(int argc, char* argv[])
 
     MainWindow window(pluginPath, title, width, height);
     window.show();
+
+#ifdef ENABLE_QML_INSPECTOR
+    // Start QML Inspector server (controlled by QML_INSPECTOR_PORT env var, default 3768)
+    InspectorServer::attach(&window);
+#endif
 
     int result = app.exec();
     logos_core_cleanup();

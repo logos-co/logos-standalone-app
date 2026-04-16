@@ -21,16 +21,22 @@
       pkgs.qt6.qtbase
       pkgs.qt6.qtremoteobjects
       pkgs.qt6.qtdeclarative
+      pkgs.qt6.qtwebview
       pkgs.qt6.qtwebsockets
       pkgs.zstd
       pkgs.krb5
       pkgs.abseil-cpp
+      pkgs.zlib
+      pkgs.icu
+    ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+      (pkgs.webkitgtk_4_1 or pkgs.webkitgtk_4_0 or pkgs.webkitgtk)
     ];
 
     qtLibPath = pkgs.lib.makeLibraryPath ([
       pkgs.qt6.qtbase
       pkgs.qt6.qtremoteobjects
       pkgs.qt6.qtdeclarative
+      pkgs.qt6.qtwebview
       pkgs.zstd
       pkgs.krb5
       pkgs.zlib
@@ -51,9 +57,8 @@
       pkgs.xorg.libxcb
     ]);
 
-    qtPluginPath = "${pkgs.qt6.qtbase}/lib/qt-6/plugins";
-    # QML import path: bundled Logos.Theme/Controls + Qt declarative fallback
-    qmlImportPath = "${placeholder "out"}/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
+    qtPluginPath = "${pkgs.qt6.qtbase}/lib/qt-6/plugins:${pkgs.qt6.qtwebview}/lib/qt-6/plugins";
+    qmlImportPath = "${placeholder "out"}/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml";
 
     dontStrip = true;
 
@@ -136,7 +141,7 @@
       # to ensure QML_IMPORT_PATH is set before the QML engine initialises.
       cat > "$out/bin/logos-standalone-app" << EOF
 #!/bin/sh
-export QML_IMPORT_PATH="$out/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml\''${QML_IMPORT_PATH:+:\$QML_IMPORT_PATH}"
+export QML_IMPORT_PATH="$out/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml\''${QML_IMPORT_PATH:+:\$QML_IMPORT_PATH}"
 export QML2_IMPORT_PATH="\$QML_IMPORT_PATH"
 exec "$out/bin/.logos-standalone-app-bin" "\$@"
 EOF

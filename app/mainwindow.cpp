@@ -76,7 +76,11 @@ QWidget* MainWindow::loadLegacyWidget(QObject* plugin)
 
 void MainWindow::setupUi(const QString& pluginPath, int width, int height)
 {
-    QQuickStyle::setStyle("Fusion");
+    // Align with logos-basecamp (which sets "Basic") so UI plugins render
+    // identically in both hosts. The Logos design system assumes a minimal
+    // style substrate; Fusion's opinionated defaults (focus rings, palette
+    // pulls, built-in indicator images) fight against the theme.
+    QQuickStyle::setStyle("Basic");
     QString resolvedPath = QFileInfo(pluginPath).absoluteFilePath();
     QWidget* widget = nullptr;
 
@@ -130,6 +134,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
             // bridge to the QML view; otherwise load the QML directly.
             QString viewField = pluginInfo.value("view").toString();
             QString qmlViewPath;
+            QString qmlBaseDir = resolvedPath;
             QString pluginSoPath;
             if (viewField.isEmpty()) {
                 qWarning() << "ui_qml module missing required 'view' field:" << resolvedPath;
@@ -141,6 +146,29 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                     pluginSoPath = resolvedPath + "/" + libs.first();
                 }
                 qmlViewPath = resolvedPath + "/" + viewField;
+
+                // DEV_QML_PATH: load QML from a source directory instead of the
+                // installed one, so edits can be picked up by relaunching without
+                // a rebuild. The env var should point at the directory holding
+                // the view entry file (e.g. .../src/qml).
+                const QString devQmlPath = QString::fromUtf8(qgetenv("DEV_QML_PATH")).trimmed();
+                if (!devQmlPath.isEmpty()) {
+                    if (QFileInfo(devQmlPath).isDir()) {
+                        const QString entry = QFileInfo(viewField).fileName();
+                        const QString override = QDir(devQmlPath).absoluteFilePath(entry);
+                        if (QFile::exists(override)) {
+                            qInfo().noquote() << "DEV_QML_PATH override active:" << override;
+                            qmlViewPath = override;
+                            qmlBaseDir = devQmlPath;
+                        } else {
+                            qWarning().noquote() << "DEV_QML_PATH set but entry not found:"
+                                                 << override << "- using installed view";
+                        }
+                    } else {
+                        qWarning().noquote() << "DEV_QML_PATH is not a directory:" << devQmlPath
+                                             << "- using installed view";
+                    }
+                }
             }
 
             QString moduleName = pluginInfo.value("name").toString();
@@ -155,7 +183,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                 // QML-only path: no backend, load QML directly in-process.
                 LogosAPI* logosAPI = new LogosAPI("standalone", this);
                 auto* bridge = new LogosQmlBridge(logosAPI, this);
-                widget = loadQmlView(resolvedPath, qmlViewPath, bridge);
+                widget = loadQmlView(qmlBaseDir, qmlViewPath, bridge);
             } else {
                 // Backend present: spawn isolated ui-host and bridge to it.
                 auto* viewHost = new ViewModuleHost(this);
@@ -203,7 +231,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                             }
                         }
 
-                        widget = loadQmlView(resolvedPath, qmlViewPath, bridge);
+                        widget = loadQmlView(qmlBaseDir, qmlViewPath, bridge);
                         if (!widget) {
                             viewHost->stop();
                             delete viewHost;

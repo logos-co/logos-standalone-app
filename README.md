@@ -98,6 +98,18 @@ When a raw `.dylib`/`.so`/`.dll` file is passed directly (instead of a directory
 
 If `metadata.json` contains an `"icon"` field with a relative file path, the app sets it as the window icon. The path is resolved relative to the directory containing `metadata.json`.
 
+### `DEV_QML_PATH` — iterate on QML without rebuilding
+
+For `ui_qml` plugins, setting `DEV_QML_PATH` to a directory redirects the view entry file (named by `metadata.json`'s `view` field) to that directory. Edit QML in source, relaunch the app, see changes — no `nix build` needed.
+
+```bash
+# view: "qml/MyView.qml" → loaded from $DEV_QML_PATH/MyView.qml
+export DEV_QML_PATH=$PWD/src/qml
+logos-standalone ./result/lib/my_ui_module
+```
+
+The directory must contain the basename of the `view` entry. The engine's base URL is set to `DEV_QML_PATH`, so relative imports (sub-components, icons) resolve alongside the entry file. If the env var is unset, invalid, or missing the entry file, the installed view is used and a warning is logged.
+
 ## Adding `nix run` to a UI module
 
 `logos-standalone-app` is bundled inside `logos-module-builder`. UI modules automatically get `apps.default` wired up — no separate flake input needed. Use the builder that matches your module type:

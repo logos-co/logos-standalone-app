@@ -170,7 +170,8 @@ EOF
         done
       fi
 
-      # Bundle Logos.Theme and Logos.Controls QML modules from the design system
+      # Bundle Logos QML modules from the design system (Theme, Controls,
+      # Icons, …) — the recursive copy picks up any submodule under Logos/.
       if [ -d "${logosDesignSystem}/lib/Logos" ]; then
         cp -r "${logosDesignSystem}/lib/Logos" "$out/lib/"
       fi

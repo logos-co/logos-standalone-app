@@ -44,6 +44,9 @@ QWidget* MainWindow::loadQmlView(const QString& baseDir, const QString& qmlFile,
     auto* quickWidget = new QQuickWidget();
     quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
     quickWidget->engine()->setBaseUrl(QUrl::fromLocalFile(baseDir + "/"));
+    const QString qmlEntryDir = QFileInfo(qmlFile).absolutePath();
+    if (!qmlEntryDir.isEmpty())
+        quickWidget->engine()->addImportPath(qmlEntryDir);
     quickWidget->rootContext()->setContextProperty("logos", bridge);
     quickWidget->setSource(QUrl::fromLocalFile(qmlFile));
 

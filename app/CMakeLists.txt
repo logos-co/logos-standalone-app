@@ -43,17 +43,25 @@ message(STATUS "logos-liblogos   : ${LOGOS_LIBLOGOS_ROOT}")
 message(STATUS "logos-cpp-sdk    : ${LOGOS_CPP_SDK_ROOT}")
 message(STATUS "logos-view-module-runtime : ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}")
 
+# Link the SDK via its exported CMake target so this consumer
+# inherits INTERFACE_INCLUDE_DIRECTORIES + INTERFACE_LINK_LIBRARIES
+# (OpenSSL::SSL, OpenSSL::Crypto, Boost::system, nlohmann_json). The
+# previous bare `link_directories(...) + -llogos_sdk` shape only put
+# liblogos_sdk.a on the link line — every Boost.Asio TLS symbol it
+# pulls in (X509_check_host, SSL_*, ...) ended up undefined on Linux
+# as soon as the SDK gained any code path that referenced the SSL
+# transports.
+find_package(logos-cpp-sdk REQUIRED CONFIG
+    PATHS ${LOGOS_CPP_SDK_ROOT}/lib/cmake/logos-cpp-sdk
+    NO_DEFAULT_PATH)
+
 include_directories(
     ${LOGOS_LIBLOGOS_ROOT}/include
-    ${LOGOS_CPP_SDK_ROOT}/include
-    ${LOGOS_CPP_SDK_ROOT}/include/cpp
-    ${LOGOS_CPP_SDK_ROOT}/include/core
     ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}/include
 )
 
 link_directories(
     ${LOGOS_LIBLOGOS_ROOT}/lib
-    ${LOGOS_CPP_SDK_ROOT}/lib
     ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}/lib
 )
 
@@ -79,7 +87,7 @@ target_link_libraries(logos-standalone-app PRIVATE
     Qt${QT_VERSION_MAJOR}::Network
     logos_view_module_runtime
     logos_core
-    logos_sdk
+    logos-cpp-sdk::logos_sdk
     $<$<BOOL:${ENABLE_QML_INSPECTOR}>:qml-inspector>
 )
 

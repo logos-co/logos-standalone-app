@@ -78,13 +78,15 @@
         cp -r ${logosQtMcp}/* ./logos-qt-mcp/
       ''}
 
-      mkdir -p logos-cpp-sdk/include/cpp logos-cpp-sdk/include/core logos-cpp-sdk/lib
-      cp -r ${logosSdk}/include/cpp/* logos-cpp-sdk/include/cpp/
-      cp -r ${logosSdk}/include/core/* logos-cpp-sdk/include/core/
-      for ext in dylib so a; do
-        f="${logosSdk}/lib/liblogos_sdk.$ext"
-        [ -f "$f" ] && cp "$f" logos-cpp-sdk/lib/
-      done
+      # Note: we deliberately do NOT stage a partial cpp-sdk copy
+      # under ./logos-cpp-sdk/ any more. The CMakeLists now uses
+      # `find_package(logos-cpp-sdk CONFIG PATHS
+      # $LOGOS_CPP_SDK_ROOT/lib/cmake/logos-cpp-sdk)`, which carries
+      # include dirs + the link interface (OpenSSL, Boost,
+      # nlohmann_json) via the imported target. Pointing
+      # LOGOS_CPP_SDK_ROOT directly at the SDK store path (set in
+      # configurePhase below) means the *Config.cmake files are
+      # present where find_package looks.
     '';
 
     preFixup = ''
@@ -116,7 +118,7 @@
         -DCMAKE_INSTALL_RPATH="" \
         -DCMAKE_SKIP_BUILD_RPATH=TRUE \
         -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos} \
-        -DLOGOS_CPP_SDK_ROOT=$(pwd)/logos-cpp-sdk \
+        -DLOGOS_CPP_SDK_ROOT=${logosSdk} \
         -DLOGOS_VIEW_MODULE_RUNTIME_ROOT=${logosViewModuleRuntime} \
         -DENABLE_QML_INSPECTOR=${if enableInspector then "ON" else "OFF"} \
         ${pkgs.lib.optionalString (enableInspector && logosQtMcp != null) "-DLOGOS_QT_MCP_ROOT=$(pwd)/logos-qt-mcp"}

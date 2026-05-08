@@ -6,18 +6,11 @@
       nixpkgs.follows = "logos-nix/nixpkgs";
       logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk";
       logos-liblogos.url = "github:logos-co/logos-liblogos";
-      logos-liblogos.inputs.nixpkgs.follows = "logos-nix/nixpkgs";
       logos-design-system.url = "github:logos-co/logos-design-system";
       logos-capability-module.url = "github:logos-co/logos-capability-module";
-      logos-capability-module.inputs.nixpkgs.follows = "logos-nix/nixpkgs";
-      logos-capability-module.inputs.logos-cpp-sdk.follows = "logos-cpp-sdk";
       logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime";
-      logos-view-module-runtime.inputs.nixpkgs.follows = "logos-nix/nixpkgs";
-      logos-view-module-runtime.inputs.logos-cpp-sdk.follows = "logos-cpp-sdk";
       nix-bundle-lgx.url = "github:logos-co/nix-bundle-lgx";
-      nix-bundle-lgx.inputs.nixpkgs.follows = "logos-nix/nixpkgs";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
-      logos-qt-mcp.inputs.nixpkgs.follows = "logos-nix/nixpkgs";
     };
 
     outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-liblogos, logos-design-system, logos-capability-module, logos-view-module-runtime, nix-bundle-lgx, logos-qt-mcp }:

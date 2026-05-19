@@ -41,6 +41,9 @@
             inherit app;
             default = app;
 
+            # Smoke test: validates binary starts and Qt/libs resolve correctly
+            smoke-test = import ./nix/smoke-test.nix { inherit pkgs; appPkg = app; };
+
             # MCP server (Node.js) for connecting Claude Code / MCP clients
             mcp-server = logos-qt-mcp.packages.${pkgs.system}.mcp-server;
 
@@ -50,6 +53,10 @@
             logos-qt-mcp = logosQtMcp;
           }
         );
+
+        checks = forAllSystems ({ pkgs, system, ... }: {
+          smoke-test = self.packages.${system}.smoke-test;
+        });
 
         apps = forAllSystems ({ pkgs, system, ... }:
           {

@@ -24,8 +24,7 @@
 #include "logos_api.h"
 
 extern "C" {
-    int logos_core_load_plugin(const char* plugin_name);
-    int logos_core_load_plugin_with_dependencies(const char* plugin_name);
+    int logos_core_load_module(const char* module_name, bool with_dependencies);
 }
 
 MainWindow::MainWindow(const QString& pluginPath,
@@ -118,12 +117,12 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
 
         // Load backend dependencies declared in metadata before showing the UI,
         // mirroring logos-app's MainUIBackend::loadUiModule() dependency handling.
-        // Uses logos_core_load_plugin_with_dependencies() to automatically resolve
+        // Uses logos_core_load_module(name, true) to automatically resolve
         // and load transitive dependencies in the correct order.
         for (const QJsonValue& dep : pluginInfo.value("dependencies").toArray()) {
             QString depName = dep.toString();
             if (depName.isEmpty()) continue;
-            if (logos_core_load_plugin_with_dependencies(depName.toUtf8().constData())) {
+            if (logos_core_load_module(depName.toUtf8().constData(), true)) {
                 qInfo() << "Loaded dependency (with transitive deps):" << depName;
             } else {
                 qWarning() << "Failed to load dependency:" << depName;

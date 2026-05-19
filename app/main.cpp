@@ -16,11 +16,10 @@
 #include <QJsonObject>
 
 extern "C" {
-    void logos_core_set_plugins_dir(const char* plugins_dir);
+    void logos_core_add_modules_dir(const char* modules_dir);
     void logos_core_start();
     void logos_core_cleanup();
-    int logos_core_load_plugin(const char* plugin_name);
-    int logos_core_load_plugin_with_dependencies(const char* plugin_name);
+    int logos_core_load_module(const char* module_name, bool with_dependencies);
 }
 
 // Find and read metadata.json for a plugin path.
@@ -116,12 +115,12 @@ int main(int argc, char* argv[])
     }
 
     // Setup logos core
-    logos_core_set_plugins_dir(modulesDir.toUtf8().constData());
+    logos_core_add_modules_dir(modulesDir.toUtf8().constData());
     logos_core_start();
     qInfo() << "Logos Core started (modules dir:" << modulesDir << ")";
 
     // Always load capability_module first — it is required by all UI plugins.
-    if (logos_core_load_plugin("capability_module")) {
+    if (logos_core_load_module("capability_module", false)) {
         qInfo() << "Loaded module: capability_module";
     } else {
         qWarning() << "Warning: failed to load module: capability_module";
@@ -129,7 +128,7 @@ int main(int argc, char* argv[])
 
     // Load any additional modules requested via --load
     for (const QString& module : parser.values(loadOption)) {
-        if (logos_core_load_plugin(module.toUtf8().constData())) {
+        if (logos_core_load_module(module.toUtf8().constData(), false)) {
             qInfo() << "Loaded module:" << module;
         } else {
             qWarning() << "Warning: failed to load module:" << module;

@@ -19,9 +19,12 @@
 #include <QQmlContext>
 #include <QEventLoop>
 #include <QTimer>
+#include <QUuid>
 #include <QtQuickControls2/QQuickStyle>
 
 #include "logos_api.h"
+#include "logos_api_client.h"
+#include "token_manager.h"
 
 extern "C" {
     int logos_core_load_module(const char* module_name, bool with_dependencies);
@@ -187,9 +190,11 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                 auto* bridge = new LogosQmlBridge(logosAPI, this);
                 widget = loadQmlView(qmlBaseDir, qmlViewPath, bridge);
             } else {
-                // Backend present: spawn isolated ui-host and bridge to it.
+                const QString uiAuthToken =
+                    QUuid::createUuid().toString(QUuid::WithoutBraces);
+
                 auto* viewHost = new ViewModuleHost(this);
-                bool spawned = viewHost->spawn(moduleName, pluginSoPath);
+                bool spawned = viewHost->spawn(moduleName, pluginSoPath, uiAuthToken);
                 if (!spawned) {
                     qWarning() << "Failed to spawn ui-host for view module" << moduleName;
                     delete viewHost;
@@ -213,6 +218,21 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                         delete viewHost;
                     } else {
                         LogosAPI* logosAPI = new LogosAPI("standalone", this);
+
+                        if (LogosAPIClient* cap =
+                                logosAPI->getClient(QStringLiteral("capability_module"))) {
+                            const QString capToken = logosAPI->getTokenManager()
+                                ->getToken(QStringLiteral("capability_module"));
+                            if (capToken.isEmpty()) {
+                                qWarning() << "no capability_module token on host —"
+                                              " UI module" << moduleName
+                                           << "will not be registered (calls will be rejected)";
+                            } else if (!cap->informModuleToken(capToken, moduleName, uiAuthToken)) {
+                                qWarning() << "capability_module.informModuleToken failed for"
+                                           << moduleName;
+                            }
+                        }
+
                         auto* bridge = new LogosQmlBridge(logosAPI, this);
                         bridge->setViewModuleSocket(moduleName, viewHost->socketName());
 

@@ -1,4 +1,4 @@
-{ pkgs, src, logosSdk, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, logosQtMcp ? null, capabilityModuleLgx, enableInspector ? (logosQtMcp != null) }:
+{ pkgs, src, logosSdk, logosProtocolPkg, logosQtSdk, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, logosQtMcp ? null, capabilityModuleLgx, enableInspector ? (logosQtMcp != null) }:
 
   pkgs.stdenv.mkDerivation rec {
     pname = "logos-standalone-app";
@@ -28,6 +28,10 @@
       pkgs.abseil-cpp
       pkgs.zlib
       pkgs.icu
+      # Qt split: the app links logos-qt-sdk::logos_qt_sdk, which carries the
+      # logos-protocol link interface (OpenSSL, Boost::system, nlohmann_json).
+      logosProtocolPkg
+      logosQtSdk
     ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
       (pkgs.webkitgtk_4_1 or pkgs.webkitgtk_4_0 or pkgs.webkitgtk)
     ];
@@ -44,6 +48,11 @@
       pkgs.stdenv.cc.cc
       pkgs.freetype
       pkgs.fontconfig
+      # Qt split: the app binary links logos-qt-sdk → logos-protocol, whose
+      # shared runtime deps (Boost.System, OpenSSL) must be reachable now
+      # that the binary's RPATH is stripped for bundling.
+      pkgs.boost
+      pkgs.openssl
     ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
       pkgs.libglvnd
       pkgs.mesa.drivers
@@ -119,6 +128,8 @@
         -DCMAKE_SKIP_BUILD_RPATH=TRUE \
         -DLOGOS_LIBLOGOS_ROOT=${logosLiblogos} \
         -DLOGOS_CPP_SDK_ROOT=${logosSdk} \
+        -DLOGOS_QT_SDK_ROOT=${logosQtSdk} \
+        -DLOGOS_PROTOCOL_ROOT=${logosProtocolPkg} \
         -DLOGOS_VIEW_MODULE_RUNTIME_ROOT=${logosViewModuleRuntime} \
         -DENABLE_QML_INSPECTOR=${if enableInspector then "ON" else "OFF"} \
         ${pkgs.lib.optionalString (enableInspector && logosQtMcp != null) "-DLOGOS_QT_MCP_ROOT=$(pwd)/logos-qt-mcp"}

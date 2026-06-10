@@ -35,22 +35,37 @@ if(NOT DEFINED LOGOS_CPP_SDK_ROOT)
     message(FATAL_ERROR "LOGOS_CPP_SDK_ROOT must be defined")
 endif()
 
+if(NOT DEFINED LOGOS_QT_SDK_ROOT)
+    message(FATAL_ERROR "LOGOS_QT_SDK_ROOT must be defined")
+endif()
+
+if(NOT DEFINED LOGOS_PROTOCOL_ROOT)
+    message(FATAL_ERROR "LOGOS_PROTOCOL_ROOT must be defined")
+endif()
+
 if(NOT DEFINED LOGOS_VIEW_MODULE_RUNTIME_ROOT)
     message(FATAL_ERROR "LOGOS_VIEW_MODULE_RUNTIME_ROOT must be defined")
 endif()
 
 message(STATUS "logos-liblogos   : ${LOGOS_LIBLOGOS_ROOT}")
 message(STATUS "logos-cpp-sdk    : ${LOGOS_CPP_SDK_ROOT}")
+message(STATUS "logos-qt-sdk     : ${LOGOS_QT_SDK_ROOT}")
+message(STATUS "logos-protocol   : ${LOGOS_PROTOCOL_ROOT}")
 message(STATUS "logos-view-module-runtime : ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}")
 
-# Link the SDK via its exported CMake target so this consumer
-# inherits INTERFACE_INCLUDE_DIRECTORIES + INTERFACE_LINK_LIBRARIES
-# (OpenSSL::SSL, OpenSSL::Crypto, Boost::system, nlohmann_json). The
-# previous bare `link_directories(...) + -llogos_sdk` shape only put
-# liblogos_sdk.a on the link line — every Boost.Asio TLS symbol it
-# pulls in (X509_check_host, SSL_*, ...) ended up undefined on Linux
-# as soon as the SDK gained any code path that referenced the SSL
-# transports.
+# Link the SDK stack via exported CMake targets so this consumer inherits
+# INTERFACE_INCLUDE_DIRECTORIES + INTERFACE_LINK_LIBRARIES (OpenSSL::SSL,
+# OpenSSL::Crypto, Boost::system, nlohmann_json) — a bare archive on the
+# link line would leave every Boost.Asio TLS symbol undefined. Since the
+# qt split the Qt developer layer (LogosAPI, provider objects) lives in
+# logos-qt-sdk, which carries the logos-protocol library transitively; the
+# Qt-free base SDK contributes header-only types via logos_headers.
+find_package(logos-protocol REQUIRED CONFIG
+    PATHS ${LOGOS_PROTOCOL_ROOT}/lib/cmake/logos-protocol
+    NO_DEFAULT_PATH)
+find_package(logos-qt-sdk REQUIRED CONFIG
+    PATHS ${LOGOS_QT_SDK_ROOT}/lib/cmake/logos-qt-sdk
+    NO_DEFAULT_PATH)
 find_package(logos-cpp-sdk REQUIRED CONFIG
     PATHS ${LOGOS_CPP_SDK_ROOT}/lib/cmake/logos-cpp-sdk
     NO_DEFAULT_PATH)
@@ -87,7 +102,8 @@ target_link_libraries(logos-standalone-app PRIVATE
     Qt${QT_VERSION_MAJOR}::Network
     logos_view_module_runtime
     logos_core
-    logos-cpp-sdk::logos_sdk
+    logos-qt-sdk::logos_qt_sdk
+    logos-cpp-sdk::logos_headers
     $<$<BOOL:${ENABLE_QML_INSPECTOR}>:qml-inspector>
 )
 

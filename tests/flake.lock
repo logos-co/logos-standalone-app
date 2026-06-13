@@ -8330,14 +8330,19 @@
         ]
       },
       "locked": {
-        "path": "..",
-        "type": "path"
+        "lastModified": 1781316215,
+        "narHash": "sha256-EaMlYHV0RFIQyJEU85Svq5iskb801abntdfd9KvLILo=",
+        "owner": "logos-co",
+        "repo": "logos-standalone-app",
+        "rev": "dd03047c28087c5c41a150e610ad75b4de6d81ab",
+        "type": "github"
       },
       "original": {
-        "path": "..",
-        "type": "path"
-      },
-      "parent": []
+        "owner": "logos-co",
+        "repo": "logos-standalone-app",
+        "rev": "dd03047c28087c5c41a150e610ad75b4de6d81ab",
+        "type": "github"
+      }
     },
     "logos-standalone-app_5": {
       "inputs": {

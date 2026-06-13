@@ -2,7 +2,7 @@
   description = "Integration tests for logos-standalone-app";
 
   inputs = {
-    logos-standalone-app.url = "github:logos-co/logos-standalone-app";
+    logos-standalone-app.url = "path:..";
     nixpkgs.follows = "logos-standalone-app/nixpkgs";
     logos-nix.follows = "logos-standalone-app/logos-nix";
 

@@ -193,11 +193,34 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                 const QString uiAuthToken =
                     QUuid::createUuid().toString(QUuid::WithoutBraces);
 
+                // Register the UI module's auth token with capability_module before
+                // spawning ui-host: ui-host runs the plugin's initLogos synchronously,
+                // so a backend ctor may fire its first (token-gated)
+                // capability_module.requestModule before ViewModuleHost emits ready().
+                // Registering only after ready races those first calls, which reach
+                // capability_module's fail-closed gate before the token is known and
+                // are rejected as unauthorized.
+                LogosAPI* logosAPI = new LogosAPI("standalone", this);
+                if (LogosAPIClient* cap =
+                        logosAPI->getClient(QStringLiteral("capability_module"))) {
+                    const QString capToken = logosAPI->getTokenManager()
+                        ->getToken(QStringLiteral("capability_module"));
+                    if (capToken.isEmpty()) {
+                        qWarning() << "no capability_module token on host:"
+                                      " UI module" << moduleName
+                                   << "will not be registered (calls will be rejected)";
+                    } else if (!cap->informModuleToken(capToken, moduleName, uiAuthToken)) {
+                        qWarning() << "capability_module.informModuleToken failed for"
+                                   << moduleName;
+                    }
+                }
+
                 auto* viewHost = new ViewModuleHost(this);
                 bool spawned = viewHost->spawn(moduleName, pluginSoPath, uiAuthToken);
                 if (!spawned) {
                     qWarning() << "Failed to spawn ui-host for view module" << moduleName;
                     delete viewHost;
+                    delete logosAPI;
                 } else {
                     // Wait for ready signal
                     QEventLoop waitLoop;
@@ -216,23 +239,8 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                         qWarning() << "Timeout waiting for ui-host ready for" << moduleName;
                         viewHost->stop();
                         delete viewHost;
+                        delete logosAPI;
                     } else {
-                        LogosAPI* logosAPI = new LogosAPI("standalone", this);
-
-                        if (LogosAPIClient* cap =
-                                logosAPI->getClient(QStringLiteral("capability_module"))) {
-                            const QString capToken = logosAPI->getTokenManager()
-                                ->getToken(QStringLiteral("capability_module"));
-                            if (capToken.isEmpty()) {
-                                qWarning() << "no capability_module token on host —"
-                                              " UI module" << moduleName
-                                           << "will not be registered (calls will be rejected)";
-                            } else if (!cap->informModuleToken(capToken, moduleName, uiAuthToken)) {
-                                qWarning() << "capability_module.informModuleToken failed for"
-                                           << moduleName;
-                            }
-                        }
-
                         auto* bridge = new LogosQmlBridge(logosAPI, this);
                         bridge->setViewModuleSocket(moduleName, viewHost->socketName());
 

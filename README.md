@@ -28,6 +28,7 @@ logos-standalone [options] <plugin-path>
 |------|-------|-------------|
 | `--plugin <path>` | `-p` | Path to the plugin directory (alternative to positional argument) |
 | `--modules-dir <dir>` | `-m` | Directory containing backend modules (default: `../modules` relative to the binary) |
+| `--user-dir <dir>` | `-u` | Session data directory; isolates module state for this instance (default: the platform application data location) |
 | `--load <module>` | `-l` | Load a named backend module before showing the UI; can be repeated |
 | `--title <title>` | `-t` | Window title (default: `name` from `metadata.json`, then plugin filename) |
 | `--width <px>` | | Window width in pixels (default: `1024`) |
@@ -55,6 +56,27 @@ logos-standalone --plugin ./chat_ui --modules-dir ./result/modules
 # Run directly via Nix against a local plugin build
 nix run github:logos-co/logos-standalone-app -- ./result/lib/chat_ui
 ```
+
+### `--user-dir`: one directory per session
+
+Backend modules do not choose where they store their state: the host assigns
+each module instance a directory, and the app derives it from the session
+directory. A module instance gets `<user-dir>/module_data/<module>/<instance>`.
+
+The default session directory is the platform application data location (on
+Linux, `~/.local/share/Logos/LogosStandalone`). Pass `--user-dir` to select
+another one, which is how two instances of the same plugin run side by side
+without sharing state:
+
+```bash
+logos-standalone --user-dir /tmp/alice ./chat_ui &
+logos-standalone --user-dir /tmp/bob   ./chat_ui &
+```
+
+The directory is created if it does not exist. Setting `LOGOS_USER_DIR` selects
+the same directory, and the flag wins when both are given. This matches Logos
+Basecamp's `--user-dir` / `LOGOS_USER_DIR`, so a session means the same thing
+under either host.
 
 ## Plugin Metadata
 

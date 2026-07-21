@@ -14,9 +14,11 @@
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStandardPaths>
 
 extern "C" {
     void logos_core_add_modules_dir(const char* modules_dir);
+    void logos_core_set_persistence_base_path(const char* path);
     void logos_core_start();
     void logos_core_cleanup();
     int logos_core_load_module(const char* module_name, bool with_dependencies);
@@ -72,6 +74,9 @@ int main(int argc, char* argv[])
         "Path to the UI plugin to load (.so / .dylib / .dll)", "path");
     QCommandLineOption modulesDirOption({"m", "modules-dir"},
         "Directory containing backend modules (default: ../modules relative to binary)", "dir");
+    QCommandLineOption userDirOption({"u", "user-dir"},
+        "Session data directory; isolates module state for this instance "
+        "(default: the platform application data location)", "dir");
     QCommandLineOption loadOption({"l", "load"},
         "Backend module name to load before showing the UI; can be repeated", "module");
     QCommandLineOption titleOption({"t", "title"},
@@ -83,6 +88,7 @@ int main(int argc, char* argv[])
 
     parser.addOption(pluginOption);
     parser.addOption(modulesDirOption);
+    parser.addOption(userDirOption);
     parser.addOption(loadOption);
     parser.addOption(titleOption);
     parser.addOption(widthOption);
@@ -114,8 +120,37 @@ int main(int argc, char* argv[])
         modulesDir = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules");
     }
 
+    // Resolve the session directory. Everything this run persists lives below
+    // it, so two instances pointed at different directories keep their module
+    // state apart. LOGOS_USER_DIR selects the same directory as --user-dir
+    // (the flag wins), the way Logos Basecamp resolves its session directory.
+    QString userDir = parser.isSet(userDirOption)
+        ? parser.value(userDirOption)
+        : qEnvironmentVariable("LOGOS_USER_DIR");
+    if (!userDir.isEmpty()) {
+        userDir = QFileInfo(userDir).absoluteFilePath();
+        QFileInfo userDirInfo(userDir);
+        if (userDirInfo.exists() && !userDirInfo.isDir()) {
+            qCritical() << "Session directory exists but is not a directory:" << userDir;
+            return 1;
+        }
+        if (!userDirInfo.exists() && !QDir().mkpath(userDir)) {
+            qCritical() << "Failed to create session directory:" << userDir;
+            return 1;
+        }
+    } else {
+        userDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    }
+    qInfo() << "Session directory:" << userDir;
+
     // Setup logos core
     logos_core_add_modules_dir(modulesDir.toUtf8().constData());
+
+    // Each module instance is handed <session dir>/module_data/<module>/<instance>
+    // as its storage location. Must be set before logos_core_start().
+    const QString moduleDataDir = userDir + "/module_data";
+    logos_core_set_persistence_base_path(moduleDataDir.toUtf8().constData());
+
     logos_core_start();
     qInfo() << "Logos Core started (modules dir:" << modulesDir << ")";
 

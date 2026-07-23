@@ -50,10 +50,19 @@
               inherit pkgs logosSdk logosProtocolPkg logosQtSdk logosLiblogos logosDesignSystem logosViewModuleRuntime logosQtMcp capabilityModuleLgx;
               src = ./.;
             };
+            # Shippable build: an unwrapped binary that nix-bundle-dir can
+            # relocate, and no inspector — releases do not carry it.
+            appPortable = import ./nix/app.nix {
+              inherit pkgs logosSdk logosProtocolPkg logosQtSdk logosLiblogos logosDesignSystem logosViewModuleRuntime capabilityModuleLgx;
+              src = ./.;
+              portable = true;
+              enableInspector = false;
+            };
           in
           {
             inherit app;
             default = app;
+            portable = appPortable;
 
             # Smoke test: validates binary starts and Qt/libs resolve correctly
             smoke-test = import ./nix/smoke-test.nix { inherit pkgs; appPkg = app; };

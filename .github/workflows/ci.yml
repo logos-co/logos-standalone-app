@@ -35,6 +35,9 @@ jobs:
     - name: Build
       run: nix build --print-build-logs
 
+    - name: Build portable
+      run: nix build '.#portable' --print-build-logs
+
     - name: Smoke test
       run: nix build '.#checks.${{ matrix.arch }}.smoke-test' --print-build-logs
 

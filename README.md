@@ -185,7 +185,12 @@ To override the standalone app with a custom build, pass `logosStandalone` to `m
 ```bash
 nix build                # produces ./result/bin/logos-standalone
 nix run -- <plugin-path> # build and run in one step
+nix build .#portable     # unwrapped binary for redistributable bundles
 ```
+
+`.#portable` is what packaging pipelines consume: the binary is installed
+without the Qt environment wrapper so [nix-bundle-dir](https://github.com/logos-co/nix-bundle-dir)
+can relocate it, and the QML inspector is compiled out.
 
 To use a local checkout of a dependency:
 

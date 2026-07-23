@@ -1,4 +1,4 @@
-{ pkgs, src, logosSdk, logosProtocolPkg, logosQtSdk, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, logosQtMcp ? null, capabilityModuleLgx, enableInspector ? (logosQtMcp != null) }:
+{ pkgs, src, logosSdk, logosProtocolPkg, logosQtSdk, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, logosQtMcp ? null, capabilityModuleLgx, enableInspector ? (logosQtMcp != null), portable ? false }:
 
   pkgs.stdenv.mkDerivation rec {
     pname = "logos-standalone-app";
@@ -70,6 +70,20 @@
     qmlImportPath = "${placeholder "out"}/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml";
 
     dontStrip = true;
+
+    # A portable build carries no Qt environment of its own: nix-bundle-dir
+    # relocates the closure and sets the plugin/QML paths from the bundle.
+    dontWrapQtApps = portable;
+
+    # Without the wrapper's absolute paths, nothing in the output refers to the
+    # Qt modules that are only ever dlopened (QML imports, the webview backend),
+    # so a bundler tracing the closure would not find them to copy.
+    passthru.extraClosurePaths = pkgs.lib.optionals portable [
+      pkgs.qt6.qtbase
+      pkgs.qt6.qtdeclarative
+      pkgs.qt6.qtwebview
+      pkgs.qt6.qtwebsockets
+    ];
 
     qtWrapperArgs = [
       "--prefix" "LD_LIBRARY_PATH" ":" qtLibPath
@@ -148,17 +162,21 @@
 
       mkdir -p $out/bin $out/lib
 
-      cp build/bin/logos-standalone-app "$out/bin/.logos-standalone-app-bin"
+      ${if portable then ''
+        cp build/bin/logos-standalone-app "$out/bin/logos-standalone-app"
+      '' else ''
+        cp build/bin/logos-standalone-app "$out/bin/.logos-standalone-app-bin"
 
-      # wrapQtAppsHook does not create shell wrappers on macOS, so we do it manually
-      # to ensure QML_IMPORT_PATH is set before the QML engine initialises.
-      cat > "$out/bin/logos-standalone-app" << EOF
+        # wrapQtAppsHook does not create shell wrappers on macOS, so we do it manually
+        # to ensure QML_IMPORT_PATH is set before the QML engine initialises.
+        cat > "$out/bin/logos-standalone-app" << EOF
 #!/bin/sh
 export QML_IMPORT_PATH="$out/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml\''${QML_IMPORT_PATH:+:\$QML_IMPORT_PATH}"
 export QML2_IMPORT_PATH="\$QML_IMPORT_PATH"
 exec "$out/bin/.logos-standalone-app-bin" "\$@"
 EOF
-      chmod +x "$out/bin/logos-standalone-app"
+        chmod +x "$out/bin/logos-standalone-app"
+      ''}
 
       [ -f "${logosLiblogos}/bin/logos_host" ] && cp -L "${logosLiblogos}/bin/logos_host" "$out/bin/"
 

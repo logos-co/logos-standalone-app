@@ -23,6 +23,7 @@
       pkgs.qt6.qtdeclarative
       pkgs.qt6.qtwebview
       pkgs.qt6.qtwebsockets
+      pkgs.qt6.qtsvg
       pkgs.zstd
       pkgs.krb5
       pkgs.abseil-cpp
@@ -66,7 +67,9 @@
       pkgs.xorg.libxcb
     ]);
 
-    qtPluginPath = "${pkgs.qt6.qtbase}/lib/qt-6/plugins:${pkgs.qt6.qtwebview}/lib/qt-6/plugins";
+    # qtsvg carries the SVG image plugin: the design system ships its icon set as
+    # SVG, and without the plugin every icon in a plugin's UI renders empty.
+    qtPluginPath = "${pkgs.qt6.qtbase}/lib/qt-6/plugins:${pkgs.qt6.qtwebview}/lib/qt-6/plugins:${pkgs.qt6.qtsvg}/lib/qt-6/plugins";
     qmlImportPath = "${placeholder "out"}/lib:${pkgs.qt6.qtdeclarative}/lib/qt-6/qml:${pkgs.qt6.qtwebview}/lib/qt-6/qml";
 
     dontStrip = true;

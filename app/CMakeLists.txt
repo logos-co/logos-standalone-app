@@ -69,6 +69,7 @@ find_package(logos-qt-sdk REQUIRED CONFIG
 find_package(logos-cpp-sdk REQUIRED CONFIG
     PATHS ${LOGOS_CPP_SDK_ROOT}/lib/cmake/logos-cpp-sdk
     NO_DEFAULT_PATH)
+find_package(LogosDesignSystem CONFIG REQUIRED)
 
 include_directories(
     ${LOGOS_LIBLOGOS_ROOT}/include
@@ -104,6 +105,7 @@ target_link_libraries(logos-standalone-app PRIVATE
     logos_core
     logos-qt-sdk::logos_qt_sdk
     logos-cpp-sdk::logos_headers
+    Logos::DesignSystem
     $<$<BOOL:${ENABLE_QML_INSPECTOR}>:qml-inspector>
 )
 

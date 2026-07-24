@@ -32,6 +32,7 @@
       # logos-protocol link interface (OpenSSL, Boost::system, nlohmann_json).
       logosProtocolPkg
       logosQtSdk
+      logosDesignSystem
     ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
       (pkgs.webkitgtk_4_1 or pkgs.webkitgtk_4_0 or pkgs.webkitgtk)
     ];
@@ -131,6 +132,7 @@
         -DLOGOS_QT_SDK_ROOT=${logosQtSdk} \
         -DLOGOS_PROTOCOL_ROOT=${logosProtocolPkg} \
         -DLOGOS_VIEW_MODULE_RUNTIME_ROOT=${logosViewModuleRuntime} \
+        -DLogosDesignSystem_DIR=${logosDesignSystem}/lib/cmake/LogosDesignSystem \
         -DENABLE_QML_INSPECTOR=${if enableInspector then "ON" else "OFF"} \
         ${pkgs.lib.optionalString (enableInspector && logosQtMcp != null) "-DLOGOS_QT_MCP_ROOT=$(pwd)/logos-qt-mcp"}
 
@@ -181,12 +183,6 @@ EOF
         for f in "${logosViewModuleRuntime}"/lib/liblogos_view_module_runtime.*; do
           [ -f "$f" ] && cp -L "$f" "$out/lib/" || true
         done
-      fi
-
-      # Bundle Logos QML modules from the design system (Theme, Controls,
-      # Icons, …) — the recursive copy picks up any submodule under Logos/.
-      if [ -d "${logosDesignSystem}/lib/Logos" ]; then
-        cp -r "${logosDesignSystem}/lib/Logos" "$out/lib/"
       fi
 
       # Install capability_module from its .lgx package into the directory structure

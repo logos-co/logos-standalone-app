@@ -174,10 +174,12 @@ int main(int argc, char* argv[])
     QString metadataDir;
     QJsonObject metadata = readPluginMetadata(pluginPath, metadataDir);
 
-    // Derive window title: --title flag > metadata "name" > plugin filename
+    // Derive window title: --title flag > metadata "display_name" > "name" > plugin filename
     QString title;
     if (parser.isSet(titleOption)) {
         title = parser.value(titleOption);
+    } else if (!metadata.isEmpty() && metadata.contains("display_name")) {
+        title = metadata.value("display_name").toString();
     } else if (!metadata.isEmpty() && metadata.contains("name")) {
         title = metadata.value("name").toString();
     } else {

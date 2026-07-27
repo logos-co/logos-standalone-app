@@ -30,7 +30,7 @@ logos-standalone [options] <plugin-path>
 | `--modules-dir <dir>` | `-m` | Directory containing backend modules (default: `../modules` relative to the binary) |
 | `--user-dir <dir>` | `-u` | Session data directory; isolates module state for this instance (default: the platform application data location) |
 | `--load <module>` | `-l` | Load a named backend module before showing the UI; can be repeated |
-| `--title <title>` | `-t` | Window title (default: `name` from `metadata.json`, then plugin filename) |
+| `--title <title>` | `-t` | Window title (default: `display_name` from `metadata.json`, then `name`, then plugin filename) |
 | `--width <px>` | | Window width in pixels (default: `1024`) |
 | `--height <px>` | | Window height in pixels (default: `768`) |
 | `--help` | `-h` | Show help and exit |

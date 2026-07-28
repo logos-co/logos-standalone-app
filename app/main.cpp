@@ -15,6 +15,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
+#include <QStyleHints>
 
 extern "C" {
     void logos_core_add_modules_dir(const char* modules_dir);
@@ -57,6 +58,9 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
     app.setOrganizationName("Logos");
     app.setApplicationName("LogosStandalone");
+    // macOS defaults Tab to text fields/lists only; Logos buttons/links need
+    // all-controls Tab focus for keyboard navigation.
+    app.styleHints()->setTabFocusBehavior(Qt::TabFocusAllControls);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(

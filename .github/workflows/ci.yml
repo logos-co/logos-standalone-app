@@ -22,7 +22,11 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Nix
-      uses: cachix/install-nix-action@v27
+      # v27 ships Nix 2.22, which keeps the stale transitive lock entries of an
+      # input replaced with --override-input. The integration test below relies
+      # on the app's own flake.lock winning over tests/flake.lock, which only
+      # holds from Nix 2.26 onwards.
+      uses: cachix/install-nix-action@v31
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes

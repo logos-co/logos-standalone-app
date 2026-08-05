@@ -87,6 +87,8 @@ add_executable(logos-standalone-app
     main.cpp
     mainwindow.cpp
     mainwindow.h
+    QmlLiveView.cpp
+    QmlLiveView.h
 )
 
 if(ENABLE_QML_INSPECTOR)

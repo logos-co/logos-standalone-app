@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "LogosQmlBridge.h"
+#include "QmlLiveView.h"
 #include "ViewModuleHost.h"
 
 #include <QPluginLoader>
@@ -43,6 +44,9 @@ MainWindow::MainWindow(const QString& pluginPath,
 
 QWidget* MainWindow::loadQmlView(const QString& baseDir, const QString& qmlFile, LogosQmlBridge* bridge)
 {
+    if (QmlLiveView::isEnabledFor(baseDir))
+        return new QmlLiveView(baseDir, qmlFile, bridge);
+
     auto* quickWidget = new QQuickWidget();
     quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
     quickWidget->engine()->setBaseUrl(QUrl::fromLocalFile(baseDir + "/"));

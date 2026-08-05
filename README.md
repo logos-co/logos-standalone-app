@@ -120,9 +120,13 @@ When a raw `.dylib`/`.so`/`.dll` file is passed directly (instead of a directory
 
 If `metadata.json` contains an `"icon"` field with a relative file path, the app sets it as the window icon. The path is resolved relative to the directory containing `metadata.json`.
 
-### `DEV_QML_PATH` — iterate on QML without rebuilding
+### QML hot reload — edit, save, see it
 
-For `ui_qml` plugins, setting `DEV_QML_PATH` to a directory redirects the view entry file (named by `metadata.json`'s `view` field) to that directory. Edit QML in source, relaunch the app, see changes — no `nix build` needed.
+For `ui_qml` plugins, setting `DEV_QML_PATH` to a directory does two things: it
+redirects the view entry file (named by `metadata.json`'s `view` field) to that
+directory, and it turns on hot reload for the whole tree underneath. Edit any
+`.qml`/`.js` file and save — the view re-renders in roughly 200 ms. No rebuild,
+no relaunch.
 
 ```bash
 # view: "qml/MyView.qml" → loaded from $DEV_QML_PATH/MyView.qml
@@ -130,7 +134,36 @@ export DEV_QML_PATH=$PWD/src/qml
 logos-standalone ./result/lib/my_ui_module
 ```
 
-The directory must contain the basename of the `view` entry. The engine's base URL is set to `DEV_QML_PATH`, so relative imports (sub-components, icons) resolve alongside the entry file. If the env var is unset, invalid, or missing the entry file, the installed view is used and a warning is logged.
+Most module authors do not need to set this by hand — `nix build .#ui-dev`
+produces a launcher that detects it automatically. See
+[logos-module-builder's README](https://github.com/logos-co/logos-module-builder#ui-modules-the-dev-loop).
+
+The directory must contain the basename of the `view` entry. The engine's base
+URL is set to `DEV_QML_PATH`, so relative imports (sub-components, icons)
+resolve alongside the entry file. If the env var is unset, invalid, or missing
+the entry file, the installed view is used and a warning is logged.
+
+What a reload does and doesn't touch:
+
+- **Sub-components and new files are covered.** The whole tree under
+  `DEV_QML_PATH` is watched recursively, including files and folders created
+  after launch.
+- **The backend keeps running.** A module's C++ backend lives in a separate
+  `ui-host` process; reloading rebuilds only the QML, so module state,
+  connections and loaded data survive.
+- **QML-side state resets** — scroll position, text fields, current tab. This is
+  inherent to re-instantiating the view.
+- **A syntax error is recoverable.** The error is logged with its line number
+  and the view goes blank; the next save that compiles brings it back.
+- **C++ changes still need a rebuild** — only QML is reloaded.
+
+Set `LOGOS_QML_HOT_RELOAD=0` to keep the `DEV_QML_PATH` redirect but disable
+watching.
+
+Implementation: `app/QmlLiveView.cpp`. Each reload builds a fresh `QQmlEngine`
+rather than re-`setSource()`-ing the existing one — `clearComponentCache()` only
+frees compilation units nothing still references, so re-sourcing can silently
+replay the previous QML while reporting success.
 
 ## Adding `nix run` to a UI module
 

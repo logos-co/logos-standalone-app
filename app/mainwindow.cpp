@@ -62,9 +62,70 @@ QWidget* MainWindow::loadQmlView(const QString& baseDir, const QString& qmlFile,
     return quickWidget;
 }
 
-QWidget* MainWindow::loadLegacyWidget(QObject* plugin)
+LogosAPI* MainWindow::hostApi()
 {
-    LogosAPI* logosAPI = new LogosAPI("standalone", this);
+    if (!m_hostApi)
+        m_hostApi = new LogosAPI("standalone", this);
+    return m_hostApi;
+}
+
+LogosAPI* MainWindow::apiForPlugin(const QString& name)
+{
+    if (name.isEmpty()) {
+        qWarning() << "refusing to build an identity for an unnamed plugin";
+        return nullptr;
+    }
+    auto it = m_pluginApis.constFind(name);
+    if (it != m_pluginApis.constEnd())
+        return it.value();
+
+    // Isolates the store BEFORE constructing anything for the name — the order
+    // matters, because a LogosAPIClient captures its store by raw pointer.
+    LogosAPI* api = LogosAPI::forIdentity(name, this);
+    if (!api) {
+        qWarning() << "could not give" << name << "its own token store -"
+                   << "refusing to run it with the host's authority";
+        return nullptr;
+    }
+    m_pluginApis.insert(name, api);
+    return api;
+}
+
+void MainWindow::registerPluginIdentity(const QString& name, const QString& authToken)
+{
+    // Over the HOST channel: informModuleToken is accepted only from the
+    // trusted core/capability channel.
+    LogosAPIClient* cap = hostApi()->getClient(QStringLiteral("capability_module"));
+    if (!cap) {
+        qWarning() << "no capability_module client: identity" << name
+                   << "will not be registered (its calls will be refused)";
+        return;
+    }
+    const QString capToken = hostApi()->getTokenManager()
+        ->getToken(QStringLiteral("capability_module"));
+    if (capToken.isEmpty()) {
+        qWarning() << "no capability_module token on host:"
+                      " module" << name
+                   << "will not be registered (calls will be rejected)";
+        return;
+    }
+    if (!cap->informModuleToken(capToken, name, authToken)) {
+        qWarning() << "capability_module.informModuleToken failed for" << name;
+    }
+}
+
+QWidget* MainWindow::loadLegacyWidget(QObject* plugin, const QString& identity)
+{
+    // The plugin's own identity, not the host's: a legacy widget plugin calls
+    // modules through exactly the LogosAPI it is handed here.
+    LogosAPI* logosAPI = apiForPlugin(identity);
+    if (!logosAPI) {
+        qWarning() << "not loading legacy plugin" << identity
+                   << "- no isolated identity available";
+        return nullptr;
+    }
+    registerPluginIdentity(identity, QUuid::createUuid().toString(QUuid::WithoutBraces));
+
     QWidget* widget = nullptr;
     bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
                                         Qt::DirectConnection,
@@ -99,7 +160,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
         } else {
             QObject* plugin = loader.instance();
             if (plugin)
-                widget = loadLegacyWidget(plugin);
+                widget = loadLegacyWidget(plugin, pathInfo.baseName());
         }
     } else {
     // Package directory path — look for metadata.json / manifest.json.
@@ -186,9 +247,24 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                 qWarning() << "View module QML file not found:" << qmlViewPath;
             } else if (pluginSoPath.isEmpty()) {
                 // QML-only path: no backend, load QML directly in-process.
-                LogosAPI* logosAPI = new LogosAPI("standalone", this);
-                auto* bridge = new LogosQmlBridge(logosAPI, this);
-                widget = loadQmlView(qmlBaseDir, qmlViewPath, bridge);
+                //
+                // This branch is the one that used to run entirely on the
+                // host's identity: it built a "standalone" LogosAPI (host
+                // ambient ring — every loaded module's root token) and never
+                // registered the module with capability_module at all, because
+                // registration was tangled up with spawning a ui-host. The QML
+                // could therefore reach any module in the process with no
+                // handshake. Both halves are now unconditional.
+                LogosAPI* logosAPI = apiForPlugin(moduleName);
+                if (!logosAPI) {
+                    qWarning() << "not loading QML-only view module" << moduleName
+                               << "- no isolated identity available";
+                } else {
+                    registerPluginIdentity(
+                        moduleName, QUuid::createUuid().toString(QUuid::WithoutBraces));
+                    auto* bridge = new LogosQmlBridge(logosAPI, this);
+                    widget = loadQmlView(qmlBaseDir, qmlViewPath, bridge);
+                }
             } else {
                 const QString uiAuthToken =
                     QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -200,27 +276,27 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                 // Registering only after ready races those first calls, which reach
                 // capability_module's fail-closed gate before the token is known and
                 // are rejected as unauthorized.
-                LogosAPI* logosAPI = new LogosAPI("standalone", this);
-                if (LogosAPIClient* cap =
-                        logosAPI->getClient(QStringLiteral("capability_module"))) {
-                    const QString capToken = logosAPI->getTokenManager()
-                        ->getToken(QStringLiteral("capability_module"));
-                    if (capToken.isEmpty()) {
-                        qWarning() << "no capability_module token on host:"
-                                      " UI module" << moduleName
-                                   << "will not be registered (calls will be rejected)";
-                    } else if (!cap->informModuleToken(capToken, moduleName, uiAuthToken)) {
-                        qWarning() << "capability_module.informModuleToken failed for"
-                                   << moduleName;
-                    }
-                }
+                registerPluginIdentity(moduleName, uiAuthToken);
 
-                auto* viewHost = new ViewModuleHost(this);
-                bool spawned = viewHost->spawn(moduleName, pluginSoPath, uiAuthToken);
+                // The bridge speaks as the MODULE, not as the host. The
+                // registration above is what lets that identity get past
+                // capability_module's known-caller gate.
+                LogosAPI* logosAPI = apiForPlugin(moduleName);
+
+                // Fall through to the "no widget" fallback rather than
+                // returning: setupUi still has to put something in the window.
+                auto* viewHost = logosAPI ? new ViewModuleHost(this) : nullptr;
+                bool spawned = viewHost
+                    && viewHost->spawn(moduleName, pluginSoPath, uiAuthToken);
                 if (!spawned) {
-                    qWarning() << "Failed to spawn ui-host for view module" << moduleName;
+                    qWarning() << (logosAPI
+                        ? "Failed to spawn ui-host for view module"
+                        : "not loading view module (no isolated identity)")
+                        << moduleName;
                     delete viewHost;
-                    delete logosAPI;
+                    // logosAPI is cached in m_pluginApis and parented to this
+                    // window; deleting it here would leave a dangling entry
+                    // that the next load of the same module would hand out.
                 } else {
                     // Wait for ready signal
                     QEventLoop waitLoop;
@@ -239,7 +315,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                         qWarning() << "Timeout waiting for ui-host ready for" << moduleName;
                         viewHost->stop();
                         delete viewHost;
-                        delete logosAPI;
+                        // logosAPI stays: it is owned by m_pluginApis/this.
                     } else {
                         auto* bridge = new LogosQmlBridge(logosAPI, this);
                         bridge->setViewModuleSocket(moduleName, viewHost->socketName());
@@ -282,8 +358,12 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                     qWarning() << "Failed to load plugin:" << loader.errorString();
                 } else {
                     QObject* plugin = loader.instance();
-                    if (plugin)
-                        widget = loadLegacyWidget(plugin);
+                    if (plugin) {
+                        QString legacyName = pluginInfo.value("name").toString();
+                        if (legacyName.isEmpty())
+                            legacyName = QFileInfo(resolvedPath).baseName();
+                        widget = loadLegacyWidget(plugin, legacyName);
+                    }
                 }
             }
         } else {

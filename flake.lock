@@ -19100,14 +19100,15 @@
     },
     "logos-nix_614": {
       "inputs": {
-        "nixpkgs": "nixpkgs_614"
+        "nixpkgs": "nixpkgs_614",
+        "nixpkgs-windows": "nixpkgs-windows"
       },
       "locked": {
-        "lastModified": 1774455309,
-        "narHash": "sha256-3AN7aFnArdysrbQQ2UskWzjNSFADb4hDCsnx69Fa0ng=",
+        "lastModified": 1786399295,
+        "narHash": "sha256-Bl1A0UgsIXioZw5uEW8Jl5u7FfZcFMnpYlpsdezFwK0=",
         "owner": "logos-co",
         "repo": "logos-nix",
-        "rev": "e637a1f5e871244d1c2df1e3c52a067f2eb406f2",
+        "rev": "6e0f4a7120fced10829b0b3a698ff619a11d4605",
         "type": "github"
       },
       "original": {
@@ -19119,7 +19120,7 @@
     "logos-nix_615": {
       "inputs": {
         "nixpkgs": "nixpkgs_615",
-        "nixpkgs-windows": "nixpkgs-windows"
+        "nixpkgs-windows": "nixpkgs-windows_2"
       },
       "locked": {
         "lastModified": 1786399295,
@@ -24606,11 +24607,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1785261709,
-        "narHash": "sha256-dcI6zmGy5+99MB9TaN7KGJkbvDWV8WT+B/8b5UPLjkE=",
+        "lastModified": 1786714960,
+        "narHash": "sha256-PZ6iBGehVe0D9/SSYDyyCT0ktL7iJ6D1Itci8anpmf0=",
         "owner": "logos-co",
         "repo": "logos-protocol",
-        "rev": "362b03fb1ec25b35ed5d630670f5fd2bd899b196",
+        "rev": "c8bab12834dbf92155b483546875e6078d17c74e",
         "type": "github"
       },
       "original": {
@@ -34355,6 +34356,22 @@
       }
     },
     "nixpkgs-windows": {
+      "locked": {
+        "lastModified": 1782723713,
+        "narHash": "sha256-oPXCU/SSUokcGaJREHibG1CBX3+s/W7orDWQOZDsEeQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b5aa0fbd538984f6e3d201be0005b4463d8b09f8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b5aa0fbd538984f6e3d201be0005b4463d8b09f8",
+        "type": "github"
+      }
+    },
+    "nixpkgs-windows_2": {
       "locked": {
         "lastModified": 1782723713,
         "narHash": "sha256-oPXCU/SSUokcGaJREHibG1CBX3+s/W7orDWQOZDsEeQ=",

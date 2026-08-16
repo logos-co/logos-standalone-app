@@ -4,9 +4,16 @@
     inputs = {
       logos-nix.url = "github:logos-co/logos-nix";
       nixpkgs.follows = "logos-nix/nixpkgs";
-      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk";
+      # Rev-pinned, not branch-head: a04b278 lives on logos-cpp-sdk's
+      # feat/sdk-codegen-b3-d11, not on its master. Leaving the URL unpinned
+      # would let `nix flake update` silently walk this back to master and drop
+      # logos_host_services.h plus the cdylib grant export.
+      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/a04b27888e1d126578f639ed46dae0c777990a10";
+      # Same reasoning: c8bab12 (the per-client token store) is a BRANCH rev,
+      # feat/per-client-token-store, so the rev belongs in the URL. It was
+      # already the locked rev; pinning it in the URL is what makes it stay.
       logos-protocol = {
-        url = "github:logos-co/logos-protocol";
+        url = "github:logos-co/logos-protocol/c8bab12834dbf92155b483546875e6078d17c74e";
         inputs.logos-nix.follows = "logos-nix";
         inputs.nixpkgs.follows = "nixpkgs";
       };
@@ -26,16 +33,50 @@
       # rev once that merges. Same rev logos-liblogos pins, deliberately: the
       # app and liblogos_core share TokenManager and the transport ABI in ONE
       # process, so the host runtime must be a single copy across that boundary.
+      #
+      # Raised 8ccb1fc -> cc24fa1c, tracking logos-liblogos: cc24fa1c is the tip
+      # of logos-plugin-qt's feat/b4-qt-host-windows-target and is exactly what
+      # logos-liblogos f2a15ef3 pins. The sibling branch
+      # feat/b4-qt-host-windows-target-8ccb1fc (989f6ae) is a REDUCED
+      # re-baselining of the same work onto 8ccb1fc and is NOT an ancestor of
+      # cc24fa1c — taking it here would put a second logos-qt-host build in the
+      # closure, i.e. two LogosAPI/TokenManager copies in one process.
       logos-plugin-qt = {
-        url = "github:logos-co/logos-plugin-qt/8ccb1fc81642ee52e843b69ac3f90a1ec7084299";
+        url = "github:logos-co/logos-plugin-qt/cc24fa1c0c43b2d96c1dc165ee545a0321318b59";
         inputs.logos-nix.follows = "logos-nix";
         inputs.nixpkgs.follows = "nixpkgs";
         inputs.logos-protocol.follows = "logos-protocol";
       };
-      logos-liblogos.url = "github:logos-co/logos-liblogos";
+      # f2a15ef3 lives on logos-liblogos's fix/b4-align-protocol-with-qt-host:
+      # it is the rev that takes the Qt host runtime from logos-qt-host too, so
+      # this app and liblogos_core agree on the single host-runtime copy above.
+      logos-liblogos.url = "github:logos-co/logos-liblogos/f2a15ef3022d8fb71dac3d612c8edec839fc51e7";
       logos-design-system.url = "github:logos-co/logos-design-system";
+      # DELIBERATELY still master (0cb33fb), NOT feat/universal-capability's
+      # fc39b1b — and this is the one input on this branch that is knowingly a
+      # step behind. fc39b1b's src/capability_module_impl.cpp includes
+      # <logos_host_services.h>, which exists only in logos-cpp-sdk b9d7641 and
+      # later, i.e. only on feat/sdk-codegen-b3-d11. But capability_module's
+      # sole input is an UNPINNED logos-module-builder, so it locks to builder
+      # master (9d3b7cc) -> logos-cpp-sdk master (e3744fb), which predates that
+      # header: it fails to compile, full stop. Forcing that nested cpp-sdk
+      # forward does not help either — builder 9d3b7cc still invokes
+      # `logos-cpp-generator --provider-header`, which cpp-sdk 1017aa5 removed.
+      #
+      # That is the capability-module -> module-builder -> standalone-app ->
+      # capability-module cycle, and THIS repo is where it is broken: builder
+      # takes logos-standalone-app as an input, so a red app here would keep
+      # the builder red and the cycle would never close. So the app pins a
+      # capability_module that builds, the builder repoints onto the new
+      # cpp-sdk, and capability_module is re-pinned onto that builder after.
+      # Raise this to fc39b1b (or its successor) once the builder has landed.
+      #
+      # 0cb33fb is also exactly what logos-liblogos f2a15ef3 pins, so the
+      # bundled .lgx and liblogos agree on one capability_module.
       logos-capability-module.url = "github:logos-co/logos-capability-module";
-      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime";
+      # 5510acd is on logos-view-module-runtime's feat/sdk-codegen-b4-qt-host —
+      # a branch rev, hence the URL pin.
+      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/5510acd9eb7fcd49e420c9e530679edfa8f315ab";
       nix-bundle-lgx.url = "github:logos-co/nix-bundle-lgx";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
     };

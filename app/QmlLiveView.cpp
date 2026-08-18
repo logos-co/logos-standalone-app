@@ -127,6 +127,9 @@ bool QmlLiveView::build()
 
     layout()->addWidget(view);
     m_view = view;
+    if (m_bridge)
+        m_bridge->replayViewModuleState();
+
     return true;
 }
 

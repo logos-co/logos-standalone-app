@@ -19,13 +19,24 @@
       };
       logos-liblogos.url = "github:logos-co/logos-liblogos";
       logos-design-system.url = "github:logos-co/logos-design-system";
-      logos-capability-module.url = "github:logos-co/logos-capability-module";
       logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime";
-      nix-bundle-lgx.url = "github:logos-co/nix-bundle-lgx";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
+      # NOTE: no logos-capability-module input, and no nix-bundle-lgx (which was
+      # here only to bundle it into a .lgx for re-extraction below).
+      #
+      # capability_module belongs to liblogos, not to this app. logos_core loads
+      # it itself — module_manager.cpp's initializeCapabilityModule() calls
+      # loadModuleInternal("capability_module") — and liblogos ships it ready to
+      # load: nix/bin.nix copies its modules/ into the package, and the default
+      # output symlinkJoins that in. So ${logosLiblogos}/modules already holds
+      # capability_module in exactly the layout logos_core expects, and this app
+      # already depends on logos-liblogos for logos_host and lib/. Declaring
+      # capability-module here built a second copy of the same module from the
+      # same source, then packed and unpacked it through a .lgx to arrive at the
+      # layout liblogos had already produced.
     };
 
-    outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-protocol, logos-qt-sdk, logos-liblogos, logos-design-system, logos-capability-module, logos-view-module-runtime, nix-bundle-lgx, logos-qt-mcp }:
+    outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-protocol, logos-qt-sdk, logos-liblogos, logos-design-system, logos-view-module-runtime, logos-qt-mcp }:
       let
         systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
         forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
@@ -36,18 +47,15 @@
           logosQtSdk = logos-qt-sdk.packages.${system}.default;
           logosLiblogos = logos-liblogos.packages.${system}.default;
           logosDesignSystem = logos-design-system.packages.${system}.default;
-          logosCapabilityModule = logos-capability-module.packages.${system}.default;
           logosViewModuleRuntime = logos-view-module-runtime.packages.${system}.default;
           logosQtMcp = logos-qt-mcp.packages.${system}.default;
-          bundleLgx = nix-bundle-lgx.bundlers.${system}.default;
         });
       in
       {
-        packages = forAllSystems ({ pkgs, logosSdk, logosProtocolPkg, logosQtSdk, logosLiblogos, logosDesignSystem, logosCapabilityModule, logosViewModuleRuntime, logosQtMcp, bundleLgx, ... }:
+        packages = forAllSystems ({ pkgs, logosSdk, logosProtocolPkg, logosQtSdk, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, logosQtMcp, ... }:
           let
-            capabilityModuleLgx = bundleLgx logosCapabilityModule;
             app = import ./nix/app.nix {
-              inherit pkgs logosSdk logosProtocolPkg logosQtSdk logosLiblogos logosDesignSystem logosViewModuleRuntime logosQtMcp capabilityModuleLgx;
+              inherit pkgs logosSdk logosProtocolPkg logosQtSdk logosLiblogos logosDesignSystem logosViewModuleRuntime logosQtMcp;
               src = ./.;
             };
           in

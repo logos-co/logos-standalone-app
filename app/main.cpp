@@ -68,8 +68,8 @@ int main(int argc, char* argv[])
         "Usage examples:\n"
         "  logos-standalone chat_ui.dylib\n"
         "  logos-standalone --plugin ./result/lib/accounts_ui.dylib\n"
-        "  logos-standalone --plugin ./result/lib --modules-dir ./modules --load capability_module\n"
-        "  logos-standalone --plugin chat_ui.so --modules-dir ./modules --load capability_module --load waku_module --load chat\n"
+        "  logos-standalone --plugin ./result/lib --modules-dir ./modules\n"
+        "  logos-standalone --plugin chat_ui.so --modules-dir ./modules --load waku_module --load chat\n"
         "  nix run github:logos-co/logos-standalone-app -- ./result/lib/chat_ui.dylib"
     );
     parser.addHelpOption();
@@ -158,12 +158,6 @@ int main(int argc, char* argv[])
     logos_core_start();
     qInfo() << "Logos Core started (modules dir:" << modulesDir << ")";
 
-    // Always load capability_module first — it is required by all UI plugins.
-    if (logos_core_load_module("capability_module", false)) {
-        qInfo() << "Loaded module: capability_module";
-    } else {
-        qWarning() << "Warning: failed to load module: capability_module";
-    }
 
     // Load any additional modules requested via --load
     for (const QString& module : parser.values(loadOption)) {

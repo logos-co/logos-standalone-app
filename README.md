@@ -48,7 +48,8 @@ logos-standalone ./wallet_ui
 logos-standalone ./result/lib/accounts_ui.dylib
 
 # Load a plugin directory with backend modules
-logos-standalone --plugin ./chat_ui --modules-dir ./modules --load capability_module
+# (capability_module is loaded by the runtime itself — no --load needed)
+logos-standalone --plugin ./chat_ui --modules-dir ./modules --load waku_module
 
 # Override the modules directory
 logos-standalone --plugin ./chat_ui --modules-dir ./result/modules

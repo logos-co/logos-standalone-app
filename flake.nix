@@ -4,16 +4,21 @@
     inputs = {
       logos-nix.url = "github:logos-co/logos-nix";
       nixpkgs.follows = "logos-nix/nixpkgs";
-      # Rev-pinned, not branch-head: a04b278 lives on logos-cpp-sdk's
-      # feat/sdk-codegen-b3-d11, not on its master. Leaving the URL unpinned
-      # would let `nix flake update` silently walk this back to master and drop
-      # logos_host_services.h plus the cdylib grant export.
-      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/a04b27888e1d126578f639ed46dae0c777990a10";
-      # Same reasoning: c8bab12 (the per-client token store) is a BRANCH rev,
-      # feat/per-client-token-store, so the rev belongs in the URL. It was
-      # already the locked rev; pinning it in the URL is what makes it stay.
+      # Was rev-pinned to a04b278 on logos-cpp-sdk's feat/sdk-codegen-b3-d11,
+      # because master then lacked logos_host_services.h and the cdylib grant
+      # export. logos-cpp-sdk#138 ("split the SDK by capability, retire the
+      # provider-header path, and harden the cdylib decode") MERGED that branch,
+      # so master (95d7b3a) now ships cpp/logos_host_services.h and the rest of
+      # the capability split. Gap closed - tracking master again.
+      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk";
+      # Was rev-pinned to c8bab12 on feat/per-client-token-store, for the
+      # per-client token store. logos-protocol#59 ("per-client token store, the
+      # host-services C ABI, and a container shape-check") MERGED that branch, so
+      # master (f4407ff) now carries TokenManager::forIdentity / isolateIdentity
+      # and the lp_grant_host_services / lp_token_keys C ABI. Gap closed -
+      # tracking master again.
       logos-protocol = {
-        url = "github:logos-co/logos-protocol/c8bab12834dbf92155b483546875e6078d17c74e";
+        url = "github:logos-co/logos-protocol";
         inputs.logos-nix.follows = "logos-nix";
         inputs.nixpkgs.follows = "nixpkgs";
       };
@@ -28,28 +33,44 @@
       # ui_qml module backends, not for the shell that loads them), no
       # logos_qt_lp_bridge.h / logos_qt_wire.h, and no logos-qt-generator.
       #
-      # Pinned to a rev rather than the branch head because logos-qt-host does
-      # not exist on logos-plugin-qt's master yet (it arrives with B1). Drop the
-      # rev once that merges. Same rev logos-liblogos pins, deliberately: the
-      # app and liblogos_core share TokenManager and the transport ABI in ONE
-      # process, so the host runtime must be a single copy across that boundary.
+      # Was rev-pinned to cc24fa1c (tip of feat/b4-qt-host-windows-target)
+      # because logos-qt-host did not exist on logos-plugin-qt's master yet.
+      # logos-plugin-qt#19 ("the Qt host runtime and cdylib-glue generator")
+      # MERGED that branch, so master (9b2c64e) publishes logos-qt-host keyed by
+      # forAllTargets. Gap closed - tracking master again.
       #
-      # Raised 8ccb1fc -> cc24fa1c, tracking logos-liblogos: cc24fa1c is the tip
-      # of logos-plugin-qt's feat/b4-qt-host-windows-target and is exactly what
-      # logos-liblogos f2a15ef3 pins. The sibling branch
-      # feat/b4-qt-host-windows-target-8ccb1fc (989f6ae) is a REDUCED
-      # re-baselining of the same work onto 8ccb1fc and is NOT an ancestor of
-      # cc24fa1c — taking it here would put a second logos-qt-host build in the
-      # closure, i.e. two LogosAPI/TokenManager copies in one process.
+      # The pin's OTHER half still matters and is NOT closed by that merge: this
+      # must stay the same host runtime logos-liblogos builds, because the app
+      # binary statically links the logos_qt_host archive while liblogos_core
+      # carries its own copy in the SAME process. logos-liblogos is still pinned
+      # at f2a15ef3, which pins cc24fa1c and does not follow this input, so the
+      # two sides no longer name one rev, and the closure now carries two
+      # logos-qt-host store paths where it carried one. That is safe today, and
+      # it was checked rather than assumed: cpp/* and nix/qt-host.nix differ
+      # between cc24fa1c and master in comments only, and the two built archives
+      # compare byte-identical in every object member (the one delta in the whole
+      # .a is the nixbld uid recorded in ar's __.SYMDEF header). The two copies
+      # therefore differ in store path, not in code.
+      # Re-check that if master's cpp/ moves ahead of what logos-liblogos pins -
+      # a real skew there is a duplicate-TokenManager bug that builds clean and
+      # only shows up at runtime.
       logos-plugin-qt = {
-        url = "github:logos-co/logos-plugin-qt/cc24fa1c0c43b2d96c1dc165ee545a0321318b59";
+        url = "github:logos-co/logos-plugin-qt";
         inputs.logos-nix.follows = "logos-nix";
         inputs.nixpkgs.follows = "nixpkgs";
         inputs.logos-protocol.follows = "logos-protocol";
       };
       # f2a15ef3 lives on logos-liblogos's fix/b4-align-protocol-with-qt-host:
-      # it is the rev that takes the Qt host runtime from logos-qt-host too, so
-      # this app and liblogos_core agree on the single host-runtime copy above.
+      # the rev that takes the Qt host runtime from logos-qt-host too. STILL
+      # PINNED, deliberately: logos-liblogos master (5035877) does not mention
+      # logos-qt-host at all, so tracking master here would drop that repoint
+      # and the include/ re-export this app compiles against.
+      #
+      # It pins logos-plugin-qt at cc24fa1c while this flake now tracks that
+      # repo's master. Those two builds are code-identical (see the
+      # logos-plugin-qt note above), so the app binary and liblogos_core still
+      # agree on the host runtime; retiring this pin later converges both sides
+      # on master.
       logos-liblogos.url = "github:logos-co/logos-liblogos/f2a15ef3022d8fb71dac3d612c8edec839fc51e7";
       logos-design-system.url = "github:logos-co/logos-design-system";
       # 3ef779c is on logos-view-module-runtime's feat/sdk-codegen-b4-qt-host,

@@ -60,18 +60,28 @@
         inputs.nixpkgs.follows = "nixpkgs";
         inputs.logos-protocol.follows = "logos-protocol";
       };
-      # f2a15ef3 lives on logos-liblogos's fix/b4-align-protocol-with-qt-host:
-      # the rev that takes the Qt host runtime from logos-qt-host too. STILL
-      # PINNED, deliberately: logos-liblogos master (5035877) does not mention
-      # logos-qt-host at all, so tracking master here would drop that repoint
-      # and the include/ re-export this app compiles against.
+      # Unpinned: fix/b4-align-protocol-with-qt-host merged (logos-liblogos#177),
+      # so master carries the qt-host repoint and the include/ re-export this app
+      # compiles against — the reason the rev pin existed.
       #
-      # It pins logos-plugin-qt at cc24fa1c while this flake now tracks that
-      # repo's master. Those two builds are code-identical (see the
-      # logos-plugin-qt note above), so the app binary and liblogos_core still
-      # agree on the host runtime; retiring this pin later converges both sides
-      # on master.
-      logos-liblogos.url = "github:logos-co/logos-liblogos/f2a15ef3022d8fb71dac3d612c8edec839fc51e7";
+      # This also removes one of the two sources of a duplicate host runtime. The
+      # app binary statically links logos-qt-host while liblogos_core.dylib
+      # carries its own copy in the SAME process, and a dylib has no interposition
+      # to merge them. While this pinned f2a15ef (which pinned logos-plugin-qt at
+      # cc24fa1c) that was a second archive; liblogos master tracks plugin-qt
+      # master now, so this path agrees with the root.
+      #
+      # ONE SOURCE REMAINS, and it is not this input: logos-view-module-runtime
+      # (pinned at 3ef779c below) still pins logos-plugin-qt at cc24fa1c, so the
+      # closure still resolves two plugin-qt revs —
+      #     logos-plugin-qt                        -> 9b2c64e5 (master)
+      #     logos-liblogos/logos-plugin-qt         -> 9b2c64e5 (master, this change)
+      #     logos-view-module-runtime/logos-plugin-qt -> cc24fa1c
+      # The two archives are code-identical today (byte-identical members, same
+      # nm output), so it is inert. Retiring it needs
+      # logos-view-module-runtime#25, which drops that repo's own plugin-qt pin;
+      # bump the 3ef779c below onto the merge result once it lands.
+      logos-liblogos.url = "github:logos-co/logos-liblogos";
       logos-design-system.url = "github:logos-co/logos-design-system";
       # 3ef779c is on logos-view-module-runtime's feat/sdk-codegen-b4-qt-host,
       # with master merged in, so it carries the hot-reload fix as well as the

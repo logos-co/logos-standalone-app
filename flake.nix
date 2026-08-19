@@ -52,36 +52,27 @@
       # this app and liblogos_core agree on the single host-runtime copy above.
       logos-liblogos.url = "github:logos-co/logos-liblogos/f2a15ef3022d8fb71dac3d612c8edec839fc51e7";
       logos-design-system.url = "github:logos-co/logos-design-system";
-      # DELIBERATELY still master (0cb33fb), NOT feat/universal-capability's
-      # fc39b1b — and this is the one input on this branch that is knowingly a
-      # step behind. fc39b1b's src/capability_module_impl.cpp includes
-      # <logos_host_services.h>, which exists only in logos-cpp-sdk b9d7641 and
-      # later, i.e. only on feat/sdk-codegen-b3-d11. But capability_module's
-      # sole input is an UNPINNED logos-module-builder, so it locks to builder
-      # master (9d3b7cc) -> logos-cpp-sdk master (e3744fb), which predates that
-      # header: it fails to compile, full stop. Forcing that nested cpp-sdk
-      # forward does not help either — builder 9d3b7cc still invokes
-      # `logos-cpp-generator --provider-header`, which cpp-sdk 1017aa5 removed.
-      #
-      # That is the capability-module -> module-builder -> standalone-app ->
-      # capability-module cycle, and THIS repo is where it is broken: builder
-      # takes logos-standalone-app as an input, so a red app here would keep
-      # the builder red and the cycle would never close. So the app pins a
-      # capability_module that builds, the builder repoints onto the new
-      # cpp-sdk, and capability_module is re-pinned onto that builder after.
-      # Raise this to fc39b1b (or its successor) once the builder has landed.
-      #
-      # 0cb33fb is also exactly what logos-liblogos f2a15ef3 pins, so the
-      # bundled .lgx and liblogos agree on one capability_module.
-      logos-capability-module.url = "github:logos-co/logos-capability-module";
-      # 5510acd is on logos-view-module-runtime's feat/sdk-codegen-b4-qt-host —
-      # a branch rev, hence the URL pin.
-      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/5510acd9eb7fcd49e420c9e530679edfa8f315ab";
-      nix-bundle-lgx.url = "github:logos-co/nix-bundle-lgx";
+      # 3ef779c is on logos-view-module-runtime's feat/sdk-codegen-b4-qt-host,
+      # with master merged in, so it carries the hot-reload fix as well as the
+      # qt-host repoint — a branch rev, hence the URL pin.
+      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/3ef779c11120c74bed3f7aea92551ccc3daffd73";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
+      # NOTE: no logos-capability-module input, and no nix-bundle-lgx (which was
+      # here only to bundle it into a .lgx for re-extraction below).
+      #
+      # capability_module belongs to liblogos, not to this app. logos_core loads
+      # it itself — module_manager.cpp's initializeCapabilityModule() calls
+      # loadModuleInternal("capability_module") — and liblogos ships it ready to
+      # load: nix/bin.nix copies its modules/ into the package, and the default
+      # output symlinkJoins that in. So ${logosLiblogos}/modules already holds
+      # capability_module in exactly the layout logos_core expects, and this app
+      # already depends on logos-liblogos for logos_host and lib/. Declaring
+      # capability-module here built a second copy of the same module from the
+      # same source, then packed and unpacked it through a .lgx to arrive at the
+      # layout liblogos had already produced.
     };
 
-    outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-protocol, logos-plugin-qt, logos-liblogos, logos-design-system, logos-capability-module, logos-view-module-runtime, nix-bundle-lgx, logos-qt-mcp }:
+    outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-protocol, logos-plugin-qt, logos-liblogos, logos-design-system, logos-view-module-runtime, logos-qt-mcp }:
       let
         systems = [ "aarch64-darwin" "x86_64-darwin" "aarch64-linux" "x86_64-linux" ];
         forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
@@ -92,18 +83,15 @@
           logosQtHost = logos-plugin-qt.packages.${system}.logos-qt-host;
           logosLiblogos = logos-liblogos.packages.${system}.default;
           logosDesignSystem = logos-design-system.packages.${system}.default;
-          logosCapabilityModule = logos-capability-module.packages.${system}.default;
           logosViewModuleRuntime = logos-view-module-runtime.packages.${system}.default;
           logosQtMcp = logos-qt-mcp.packages.${system}.default;
-          bundleLgx = nix-bundle-lgx.bundlers.${system}.default;
         });
       in
       {
-        packages = forAllSystems ({ pkgs, logosSdk, logosProtocolPkg, logosQtHost, logosLiblogos, logosDesignSystem, logosCapabilityModule, logosViewModuleRuntime, logosQtMcp, bundleLgx, ... }:
+        packages = forAllSystems ({ pkgs, logosSdk, logosProtocolPkg, logosQtHost, logosLiblogos, logosDesignSystem, logosViewModuleRuntime, logosQtMcp, ... }:
           let
-            capabilityModuleLgx = bundleLgx logosCapabilityModule;
             app = import ./nix/app.nix {
-              inherit pkgs logosSdk logosProtocolPkg logosQtHost logosLiblogos logosDesignSystem logosViewModuleRuntime logosQtMcp capabilityModuleLgx;
+              inherit pkgs logosSdk logosProtocolPkg logosQtHost logosLiblogos logosDesignSystem logosViewModuleRuntime logosQtMcp;
               src = ./.;
             };
           in

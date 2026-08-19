@@ -71,22 +71,15 @@
       # cc24fa1c) that was a second archive; liblogos master tracks plugin-qt
       # master now, so this path agrees with the root.
       #
-      # ONE SOURCE REMAINS, and it is not this input: logos-view-module-runtime
-      # (pinned at 3ef779c below) still pins logos-plugin-qt at cc24fa1c, so the
-      # closure still resolves two plugin-qt revs —
-      #     logos-plugin-qt                        -> 9b2c64e5 (master)
-      #     logos-liblogos/logos-plugin-qt         -> 9b2c64e5 (master, this change)
-      #     logos-view-module-runtime/logos-plugin-qt -> cc24fa1c
-      # The two archives are code-identical today (byte-identical members, same
-      # nm output), so it is inert. Retiring it needs
-      # logos-view-module-runtime#25, which drops that repo's own plugin-qt pin;
-      # bump the 3ef779c below onto the merge result once it lands.
+      # logos-view-module-runtime was the other source and is unpinned below now
+      # (its #25 merged), so every path resolves logos-plugin-qt to master and the
+      # closure carries ONE logos-qt-host.
       logos-liblogos.url = "github:logos-co/logos-liblogos";
       logos-design-system.url = "github:logos-co/logos-design-system";
       # 3ef779c is on logos-view-module-runtime's feat/sdk-codegen-b4-qt-host,
       # with master merged in, so it carries the hot-reload fix as well as the
       # qt-host repoint — a branch rev, hence the URL pin.
-      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/3ef779c11120c74bed3f7aea92551ccc3daffd73";
+      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
       # NOTE: no logos-capability-module input, and no nix-bundle-lgx (which was
       # here only to bundle it into a .lgx for re-extraction below).

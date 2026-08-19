@@ -35,8 +35,8 @@ if(NOT DEFINED LOGOS_CPP_SDK_ROOT)
     message(FATAL_ERROR "LOGOS_CPP_SDK_ROOT must be defined")
 endif()
 
-if(NOT DEFINED LOGOS_QT_SDK_ROOT)
-    message(FATAL_ERROR "LOGOS_QT_SDK_ROOT must be defined")
+if(NOT DEFINED LOGOS_QT_HOST_ROOT)
+    message(FATAL_ERROR "LOGOS_QT_HOST_ROOT must be defined")
 endif()
 
 if(NOT DEFINED LOGOS_PROTOCOL_ROOT)
@@ -49,7 +49,7 @@ endif()
 
 message(STATUS "logos-liblogos   : ${LOGOS_LIBLOGOS_ROOT}")
 message(STATUS "logos-cpp-sdk    : ${LOGOS_CPP_SDK_ROOT}")
-message(STATUS "logos-qt-sdk     : ${LOGOS_QT_SDK_ROOT}")
+message(STATUS "logos-qt-host    : ${LOGOS_QT_HOST_ROOT}")
 message(STATUS "logos-protocol   : ${LOGOS_PROTOCOL_ROOT}")
 message(STATUS "logos-view-module-runtime : ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}")
 
@@ -57,20 +57,30 @@ message(STATUS "logos-view-module-runtime : ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}")
 # INTERFACE_INCLUDE_DIRECTORIES + INTERFACE_LINK_LIBRARIES (OpenSSL::SSL,
 # OpenSSL::Crypto, Boost::system, nlohmann_json) — a bare archive on the
 # link line would leave every Boost.Asio TLS symbol undefined. Since the
-# qt split the Qt developer layer (LogosAPI, provider objects) lives in
-# logos-qt-sdk, which carries the logos-protocol library transitively; the
-# Qt-free base SDK contributes header-only types via logos_headers.
+# qt split the Qt HOST RUNTIME (LogosAPI, provider objects) lives in
+# logos-plugin-qt as logos-qt-host, which carries the logos-protocol library
+# transitively; the Qt-free base SDK contributes header-only types via
+# logos_headers.
 find_package(logos-protocol REQUIRED CONFIG
     PATHS ${LOGOS_PROTOCOL_ROOT}/lib/cmake/logos-protocol
     NO_DEFAULT_PATH)
-find_package(logos-qt-sdk REQUIRED CONFIG
-    PATHS ${LOGOS_QT_SDK_ROOT}/lib/cmake/logos-qt-sdk
+find_package(logos-qt-host REQUIRED CONFIG
+    PATHS ${LOGOS_QT_HOST_ROOT}/lib/cmake/logos-qt-host
     NO_DEFAULT_PATH)
 find_package(logos-cpp-sdk REQUIRED CONFIG
     PATHS ${LOGOS_CPP_SDK_ROOT}/lib/cmake/logos-cpp-sdk
     NO_DEFAULT_PATH)
 find_package(LogosDesignSystem CONFIG REQUIRED)
 
+# NOTE: logos-liblogos re-exports its own copy of the host-runtime headers
+# (logos_api.h & co.) into ${LOGOS_LIBLOGOS_ROOT}/include, and this explicit -I
+# precedes the -isystem that nix's cc-wrapper adds for the logos-qt-host
+# buildInput. So the app LINKS logos-qt-host::logos_qt_host but COMPILES those
+# headers out of liblogos' re-export. Listing ${LOGOS_QT_HOST_ROOT}/include here
+# does NOT change that — CMake strips any dir it sees in
+# CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES, which is exactly where the wrapper put
+# it. The two copies agree as long as liblogos is built against the same qt-host,
+# which is the only pin set this app is meant to be built in.
 include_directories(
     ${LOGOS_LIBLOGOS_ROOT}/include
     ${LOGOS_VIEW_MODULE_RUNTIME_ROOT}/include
@@ -105,7 +115,7 @@ target_link_libraries(logos-standalone-app PRIVATE
     Qt${QT_VERSION_MAJOR}::Network
     logos_view_module_runtime
     logos_core
-    logos-qt-sdk::logos_qt_sdk
+    logos-qt-host::logos_qt_host
     logos-cpp-sdk::logos_headers
     Logos::DesignSystem
     $<$<BOOL:${ENABLE_QML_INSPECTOR}>:qml-inspector>

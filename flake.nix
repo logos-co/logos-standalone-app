@@ -126,6 +126,18 @@
             # Smoke test: validates binary starts and Qt/libs resolve correctly
             smoke-test = import ./nix/smoke-test.nix { inherit pkgs; appPkg = app; };
 
+            # One-runtime symbol gate. This app loads THIRD-PARTY plugins
+            # in-process, so a duplicate TokenManager here surfaces as refused
+            # calls in someone else's plugin, with no build diagnostic.
+            symbol-gate = import ./nix/symbol-gate.nix { inherit pkgs; appPkg = app; };
+
+            # Negative control, shipped WITH the gate: plants a real duplicate
+            # definer and asserts the gate rejects it. An absence assertion that
+            # has never been seen to fail is indistinguishable from a broken one.
+            symbol-gate-negative = import ./nix/symbol-gate.nix {
+              inherit pkgs; appPkg = app; negativeControl = true;
+            };
+
             # MCP server (Node.js) for connecting Claude Code / MCP clients
             mcp-server = logos-qt-mcp.packages.${pkgs.system}.mcp-server;
 
@@ -138,6 +150,8 @@
 
         checks = forAllSystems ({ pkgs, system, ... }: {
           smoke-test = self.packages.${system}.smoke-test;
+          symbol-gate = self.packages.${system}.symbol-gate;
+          symbol-gate-negative = self.packages.${system}.symbol-gate-negative;
         });
 
         apps = forAllSystems ({ pkgs, system, ... }:

@@ -75,7 +75,7 @@ find_package(LogosDesignSystem CONFIG REQUIRED)
 # NOTE: logos-liblogos re-exports its own copy of the host-runtime headers
 # (logos_api.h & co.) into ${LOGOS_LIBLOGOS_ROOT}/include, and this explicit -I
 # precedes the -isystem that nix's cc-wrapper adds for the logos-qt-host
-# buildInput. So the app LINKS logos-qt-host::logos_qt_host but COMPILES those
+# buildInput. So the app LINKS logos-qt-host::logos_qt_host_shared but COMPILES those
 # headers out of liblogos' re-export. Listing ${LOGOS_QT_HOST_ROOT}/include here
 # does NOT change that — CMake strips any dir it sees in
 # CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES, which is exactly where the wrapper put
@@ -115,7 +115,24 @@ target_link_libraries(logos-standalone-app PRIVATE
     Qt${QT_VERSION_MAJOR}::Network
     logos_view_module_runtime
     logos_core
-    logos-qt-host::logos_qt_host
+    # The SHARED Qt host runtime, not the static archive.
+    #
+    # This app loads third-party plugins IN-PROCESS (QPluginLoader, see
+    # mainwindow.cpp's loadLegacyWidget / apiForPlugin), so the types that must
+    # exist exactly once per process -- TokenManager, the per-identity
+    # StoreRegistry, LogosAPI -- must come from ONE image. Linking the static
+    # archive gave this exe its own copy of every function-local static inside
+    # it, so a token the host saved was invisible to the plugin and every
+    # cross-module call was refused, with no build diagnostic.
+    #
+    # It became load-bearing rather than merely untidy with logos-liblogos#182:
+    # liblogos_core no longer DEFINES the runtime, it imports it. An exe still
+    # linking the archive would therefore hold the only other copy in the
+    # process, which is the split-brain rather than a spare.
+    #
+    # logos_qt_host_shared PUBLIC-links logos_protocol_shared, so the protocol
+    # half arrives transitively and correctly layered.
+    logos-qt-host::logos_qt_host_shared
     logos-cpp-sdk::logos_headers
     Logos::DesignSystem
     $<$<BOOL:${ENABLE_QML_INSPECTOR}>:qml-inspector>

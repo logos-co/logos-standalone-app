@@ -30,14 +30,27 @@
 { pkgs, appPkg, negativeControl ? false }:
 
 let
-  isDarwin = pkgs.stdenv.isDarwin;
-  definedCmd = if isDarwin then "nm -gU" else "nm -D --defined-only";
-  totalCmd   = if isDarwin then "nm -a" else "nm -D";
+  isDarwin  = pkgs.stdenv.isDarwin;
+  isWindows = pkgs.stdenv.hostPlatform.isWindows;
+  # "" natively, "x86_64-w64-mingw32-" for a Windows cross. The cross bintools
+  # installs ONLY the prefixed names, so a bare `nm` / `c++filt` is not on PATH
+  # in that derivation and every measurement reads nothing -- valid() then
+  # refuses to assert over it. Fail-closed, but the gate could never run.
+  tp = pkgs.stdenv.cc.targetPrefix;
+  # Mach-O: -gU is defined externals. ELF: -D --defined-only. A PE has no ELF
+  # dynamic symbol table, so -D reads NOTHING from a .dll.
+  definedCmd = if isDarwin then "${tp}nm -gU"
+               else if isWindows then "${tp}nm --defined-only"
+               else "${tp}nm -D --defined-only";
+  totalCmd   = if isDarwin then "${tp}nm -a"
+               else if isWindows then "${tp}nm"
+               else "${tp}nm -D";
 in
 pkgs.runCommand "logos-standalone-app-symbol-gate${pkgs.lib.optionalString negativeControl "-negative"}" {
   nativeBuildInputs = [ pkgs.coreutils pkgs.findutils pkgs.gnugrep pkgs.gnused pkgs.stdenv.cc.bintools ];
 } ''
   set -uo pipefail
+  export LC_ALL=C   # comm(1) in names() requires a byte-order sort
   FAIL=0
   note() { printf '  %-52s %s\n' "$1" "$2"; }
   bad()  { FAIL=1; printf '  %-52s %s\n' "$1" "$2"; }
@@ -83,7 +96,26 @@ pkgs.runCommand "logos-standalone-app-symbol-gate${pkgs.lib.optionalString negat
     printf '%s\n' "$f"
   }
 
-  names() { ${definedCmd} "$1" 2>/dev/null | c++filt 2>/dev/null | sed -E 's/^[0-9a-fA-F]+ [A-Za-z] //'; }
+  ${if isWindows then ''
+  # PE reports an import THUNK as a defined text symbol: ld synthesizes a .text
+  # stub AND an __imp_<mangled> import-address-table slot per imported function,
+  # and `nm --defined-only` shows the stub as `T`. Counting that alone reports
+  # images as DEFINERS of types they merely import. The paired __imp_ entry is
+  # the discriminator, and it is the right one -- a genuine second copy
+  # statically linked in has no __imp_ slot and still counts. (The PE export
+  # table would also hide the phantom, but it hides a real private copy too,
+  # trading a false positive for a false NEGATIVE.)
+  names() {
+    local t; t=$(mktemp -d)
+    ${definedCmd} "$1" 2>/dev/null | awk '{print $3}' | grep -v '^$' | sort -u > "$t/all"
+    grep '^__imp_' "$t/all" | sed 's/^__imp_//' | sort -u > "$t/imp"
+    grep -v '^__imp_' "$t/all" | sort -u > "$t/def"
+    comm -23 "$t/def" "$t/imp" | ${tp}c++filt 2>/dev/null
+    rm -rf "$t"
+  }
+  '' else ''
+  names() { ${definedCmd} "$1" 2>/dev/null | ${tp}c++filt 2>/dev/null | sed -E 's/^[0-9a-fA-F]+ [A-Za-z] //'; }
+  ''}
   valid() {
     local t; t=$(${totalCmd} "$1" 2>/dev/null | wc -l | tr -d ' ')
     [ "''${t:-0}" -gt 0 ] || { bad "$(basename "$1")" "ERROR: nm read 0 symbols — vacuous"; return 1; }
@@ -100,7 +132,9 @@ pkgs.runCommand "logos-standalone-app-symbol-gate${pkgs.lib.optionalString negat
   # assertion below passes over nothing.
   OWNERS=()
   while IFS= read -r p; do [ -n "$p" ] && OWNERS+=("$p"); done < <(
-    find -L "$ROOT/lib" -maxdepth 1 -type f \( -name 'liblogos_*.dylib' -o -name 'liblogos_*.so' \) 2>/dev/null || true)
+    find -L "$ROOT/lib" "$ROOT/bin" -maxdepth 1 -type f \
+      \( -name 'liblogos_*.dylib' -o -name 'liblogos_*.so' -o -name 'liblogos_*.dll' \) \
+      2>/dev/null || true)
 
   ${pkgs.lib.optionalString negativeControl ''
     # Plant a duplicate of a real DEFINER, not of liblogos_core: liblogos_core

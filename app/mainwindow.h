@@ -4,6 +4,9 @@
 #include <QMainWindow>
 #include <QString>
 
+// logos::ConsumerIdentity — what logos::admitConsumer hands back.
+#include "logos_consumer.h"
+
 class LogosAPI;
 class LogosQmlBridge;
 
@@ -31,19 +34,26 @@ private:
     // it keeps the host's ambient token ring. Only the host uses it.
     LogosAPI* hostApi();
 
-    // The plugin's channel. Bound to an ISOLATED token store, so the plugin
-    // starts with the bootstrap tokens only instead of inheriting the host's
-    // ring — which held every loaded module's root token and made every plugin
-    // able to call every module without a capability handshake.
+    // The plugin's channel. logos::admitConsumer gives it an ISOLATED token
+    // store, mints a credential, registers that credential with
+    // capability_module over hostApi()'s trusted channel, and installs it — in
+    // that order. Without the store the plugin inherits the host's ring, which
+    // held every loaded module's root token and made every plugin able to call
+    // every module with no capability handshake; without the credential it
+    // holds nothing it is entitled to and can call nothing.
     //
-    // nullptr means the identity could not be isolated; that is fatal for the
-    // plugin rather than a cue to fall back to hostApi().
-    LogosAPI* apiForPlugin(const QString& name);
-
-    // Make `name` a known caller at capability_module. Without it the isolated
-    // identity's first requestModule is refused and it can obtain no token.
-    void registerPluginIdentity(const QString& name, const QString& authToken);
+    // THIS USED TO BE TWO PRIVATE HELPERS spelled out here and again —
+    // differently — in logos-basecamp. The divergence was not cosmetic: this
+    // file called registerPluginIdentity BEFORE apiForPlugin in the backend
+    // branch, i.e. it registered a credential at capability_module before the
+    // identity's store existed. That was harmless only because the credential
+    // was discarded either way. There is now one implementation and no order
+    // for a host to get wrong.
+    //
+    // A falsy ConsumerIdentity is fatal for the plugin rather than a cue to
+    // fall back to hostApi().
+    logos::ConsumerIdentity consumerFor(const QString& name);
 
     LogosAPI* m_hostApi = nullptr;
-    QHash<QString, LogosAPI*> m_pluginApis;
+    QHash<QString, logos::ConsumerIdentity> m_consumers;
 };

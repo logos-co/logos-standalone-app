@@ -74,7 +74,39 @@
       # logos-view-module-runtime was the other source and is unpinned below now
       # (its #25 merged), so every path resolves logos-plugin-qt to master and the
       # closure carries ONE logos-qt-host.
-      logos-liblogos.url = "github:logos-co/logos-liblogos";
+      #
+      # Rev-pinned to logos-liblogos#186 (chore/protocol-0.8-plugin-qt-master),
+      # the liblogos half of this wave, which is not merged yet. It moves in
+      # lockstep with logos-plugin-qt above: plugin-qt#26 made protocol 0.8 a hard
+      # floor for every consumer of logos-qt-host (logos_provider_object.cpp and
+      # qt_provider_object.cpp call TokenManager::saveInboundToken unguarded), so
+      # neither liblogos nor this app can straddle 0.7/0.8. Retire the pin for a
+      # plain master URL once #186 lands.
+      #
+      # The two `follows` are REDUNDANT TODAY and deliberately kept anyway; that
+      # was measured, not assumed. nix/app.nix:173 copies ${logosLiblogos}/lib/*
+      # into this app's own lib/ while the binary links logos-qt-host directly, so
+      # if liblogos ever resolves logos-plugin-qt through its OWN lock instead of
+      # this root, the app LINKS one host runtime and SHIPS another beside it.
+      #
+      # With the pin above, liblogos#186's lock already names plugin-qt 048152f2 —
+      # this root's rev — so adding or removing these two lines changes nothing:
+      # 3 logos-qt-host derivations either way, and ONE in the runtime closure.
+      # The agreement is a coincidence of two locks, not a constraint.
+      #
+      # What it protects is the NEXT step. Point this input back at plain master
+      # (which is what happens when #186 lands and the pin is retired) and liblogos
+      # carries its own plugin-qt again: liblogos master pins 1aa3e31c, and its
+      # packaged lib/liblogos_qt_host.so is a DIFFERENT store path from this root's
+      # and differs byte-wise. Measured on liblogos master bfbb1998: qt-host
+      # kdz79ljg… against this root's ka5vgzb8…, and the derivation count goes
+      # 6 -> 7. These lines make the agreement structural so that retiring the pin
+      # is a one-line edit rather than a silent regression.
+      logos-liblogos = {
+        url = "github:logos-co/logos-liblogos/chore/protocol-0.8-plugin-qt-master";
+        inputs.logos-plugin-qt.follows = "logos-plugin-qt";
+        inputs.logos-protocol.follows = "logos-protocol";
+      };
       logos-design-system.url = "github:logos-co/logos-design-system";
       # 3ef779c is on logos-view-module-runtime's feat/sdk-codegen-b4-qt-host,
       # with master merged in, so it carries the hot-reload fix as well as the

@@ -20,12 +20,10 @@
 #include <QQmlContext>
 #include <QEventLoop>
 #include <QTimer>
-#include <QUuid>
 #include <QtQuickControls2/QQuickStyle>
 
 #include "logos_api.h"
-#include "logos_api_client.h"
-#include "token_manager.h"
+#include "logos_consumer.h"
 
 extern "C" {
     int logos_core_load_module(const char* module_name, bool with_dependencies);
@@ -73,62 +71,44 @@ LogosAPI* MainWindow::hostApi()
     return m_hostApi;
 }
 
-LogosAPI* MainWindow::apiForPlugin(const QString& name)
+logos::ConsumerIdentity MainWindow::consumerFor(const QString& name)
 {
     if (name.isEmpty()) {
         qWarning() << "refusing to build an identity for an unnamed plugin";
-        return nullptr;
+        return {};
     }
-    auto it = m_pluginApis.constFind(name);
-    if (it != m_pluginApis.constEnd())
+    auto it = m_consumers.constFind(name);
+    if (it != m_consumers.constEnd())
         return it.value();
 
-    // Isolates the store BEFORE constructing anything for the name — the order
-    // matters, because a LogosAPIClient captures its store by raw pointer.
-    LogosAPI* api = LogosAPI::forIdentity(name, this);
-    if (!api) {
-        qWarning() << "could not give" << name << "its own token store -"
+    // Isolate, construct, mint, register, adopt — all of it, in the one order
+    // that leaves no window, and over the HOST's client because
+    // informModuleToken is accepted only from the trusted core/capability
+    // channel. See logos_consumer.h.
+    logos::ConsumerIdentity consumer = logos::admitConsumer(name, hostApi(), this);
+    if (!consumer) {
+        qWarning() << "could not admit" << name << "as a consumer -"
                    << "refusing to run it with the host's authority";
-        return nullptr;
+        return {};
     }
-    m_pluginApis.insert(name, api);
-    return api;
-}
+    m_consumers.insert(name, consumer);
 
-void MainWindow::registerPluginIdentity(const QString& name, const QString& authToken)
-{
-    // Over the HOST channel: informModuleToken is accepted only from the
-    // trusted core/capability channel.
-    LogosAPIClient* cap = hostApi()->getClient(QStringLiteral("capability_module"));
-    if (!cap) {
-        qWarning() << "no capability_module client: identity" << name
-                   << "will not be registered (its calls will be refused)";
-        return;
-    }
-    const QString capToken = hostApi()->getTokenManager()
-        ->getToken(QStringLiteral("capability_module"));
-    if (capToken.isEmpty()) {
-        qWarning() << "no capability_module token on host:"
-                      " module" << name
-                   << "will not be registered (calls will be rejected)";
-        return;
-    }
-    if (!cap->informModuleToken(capToken, name, authToken)) {
-        qWarning() << "capability_module.informModuleToken failed for" << name;
-    }
+    return consumer;
 }
 
 QWidget* MainWindow::loadLegacyWidget(QObject* plugin, const QString& identity)
 {
     // The plugin's own identity, not the host's: a legacy widget plugin calls
-    // modules through exactly the LogosAPI it is handed here.
-    LogosAPI* logosAPI = apiForPlugin(identity);
-    if (!logosAPI) {
+    // modules through exactly the LogosAPI it is handed here. One call where
+    // there were two — and the credential it mints now reaches the plugin's
+    // store instead of being registered and dropped.
+    const logos::ConsumerIdentity consumer = consumerFor(identity);
+    if (!consumer) {
         qWarning() << "not loading legacy plugin" << identity
-                   << "- no isolated identity available";
+                   << "- it could not be admitted as a consumer";
         return nullptr;
     }
-    registerPluginIdentity(identity, QUuid::createUuid().toString(QUuid::WithoutBraces));
+    LogosAPI* logosAPI = consumer.api;
 
     QWidget* widget = nullptr;
     bool ok = QMetaObject::invokeMethod(plugin, "createWidget",
@@ -262,46 +242,43 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                 // registration was tangled up with spawning a ui-host. The QML
                 // could therefore reach any module in the process with no
                 // handshake. Both halves are now unconditional.
-                LogosAPI* logosAPI = apiForPlugin(moduleName);
-                if (!logosAPI) {
+                const logos::ConsumerIdentity consumer = consumerFor(moduleName);
+                if (!consumer) {
                     qWarning() << "not loading QML-only view module" << moduleName
-                               << "- no isolated identity available";
+                               << "- it could not be admitted as a consumer";
                 } else {
-                    registerPluginIdentity(
-                        moduleName, QUuid::createUuid().toString(QUuid::WithoutBraces));
-                    auto* bridge = new LogosQmlBridge(logosAPI, this);
+                    auto* bridge = new LogosQmlBridge(consumer.api, this);
                     widget = loadQmlView(qmlBaseDir, qmlViewPath, bridge);
                 }
             } else {
-                const QString uiAuthToken =
-                    QUuid::createUuid().toString(QUuid::WithoutBraces);
-
-                // Register the UI module's auth token with capability_module before
-                // spawning ui-host: ui-host runs the plugin's initLogos synchronously,
-                // so a backend ctor may fire its first (token-gated)
-                // capability_module.requestModule before ViewModuleHost emits ready().
-                // Registering only after ready races those first calls, which reach
-                // capability_module's fail-closed gate before the token is known and
-                // are rejected as unauthorized.
-                registerPluginIdentity(moduleName, uiAuthToken);
-
-                // The bridge speaks as the MODULE, not as the host. The
-                // registration above is what lets that identity get past
-                // capability_module's known-caller gate.
-                LogosAPI* logosAPI = apiForPlugin(moduleName);
+                // ONE admission, and it happens BEFORE ui-host is spawned.
+                // ui-host runs the plugin's initLogos synchronously, so a
+                // backend ctor may fire its first (token-gated)
+                // capability_module.requestModule before ViewModuleHost emits
+                // ready(); registering only after ready races those calls, which
+                // then reach capability_module's fail-closed gate before the
+                // credential is known and are rejected as unauthorized.
+                // admitConsumer's registration is synchronous, so that race is
+                // closed here rather than merely narrowed.
+                //
+                // The order used to be inverted in this file — registration
+                // first, store second — which registered a credential for an
+                // identity whose store did not yet exist.
+                const logos::ConsumerIdentity consumer = consumerFor(moduleName);
+                LogosAPI* logosAPI = consumer.api;
 
                 // Fall through to the "no widget" fallback rather than
                 // returning: setupUi still has to put something in the window.
-                auto* viewHost = logosAPI ? new ViewModuleHost(this) : nullptr;
+                auto* viewHost = consumer ? new ViewModuleHost(this) : nullptr;
                 bool spawned = viewHost
-                    && viewHost->spawn(moduleName, pluginSoPath, uiAuthToken);
+                    && viewHost->spawn(moduleName, pluginSoPath, consumer.credential);
                 if (!spawned) {
-                    qWarning() << (logosAPI
+                    qWarning() << (consumer
                         ? "Failed to spawn ui-host for view module"
-                        : "not loading view module (no isolated identity)")
+                        : "not loading view module (it could not be admitted)")
                         << moduleName;
                     delete viewHost;
-                    // logosAPI is cached in m_pluginApis and parented to this
+                    // The LogosAPI is cached in m_consumers and parented to this
                     // window; deleting it here would leave a dangling entry
                     // that the next load of the same module would hand out.
                 } else {
@@ -322,7 +299,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                         qWarning() << "Timeout waiting for ui-host ready for" << moduleName;
                         viewHost->stop();
                         delete viewHost;
-                        // logosAPI stays: it is owned by m_pluginApis/this.
+                        // logosAPI stays: it is owned by m_consumers/this.
                     } else {
                         auto* bridge = new LogosQmlBridge(logosAPI, this);
                         bridge->setViewModuleSocket(moduleName, viewHost->socketName());

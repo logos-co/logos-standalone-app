@@ -55,6 +55,11 @@ static QJsonObject readPluginMetadata(const QString& pluginPath, QString& plugin
 
 int main(int argc, char* argv[])
 {
+    // Log to stderr by default.
+    if (!qEnvironmentVariableIsSet("QT_FORCE_STDERR_LOGGING")) {
+        qputenv("QT_FORCE_STDERR_LOGGING", "1");
+    }
+
     QApplication app(argc, argv);
     app.setOrganizationName("Logos");
     app.setApplicationName("LogosStandalone");

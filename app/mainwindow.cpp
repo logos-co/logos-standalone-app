@@ -10,6 +10,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
+#include <QStringList>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QDebug>
@@ -28,6 +30,74 @@
 extern "C" {
     int logos_core_load_module(const char* module_name, bool with_dependencies);
 }
+
+namespace {
+
+/// The backend library a plugin DECLARES, or nothing.
+///
+/// This used to glob `*.dylib/*.so/*.dll` and take `libs.first()` — the
+/// alphabetically first file, since QDir sorts by name. A plugin that ships any
+/// other library alongside its own (an external dependency, a replica factory)
+/// could therefore hand ui-host a library that is not a Qt plugin at all, and
+/// the view would never render. `signer_ui` ships two and worked only because
+/// `signer_ui_plugin` sorts before `signer_ui_replica_factory`.
+///
+/// Mirrors lgpm's resolveMainFilePath(), which is what Basecamp already gets its
+/// path from. Returns empty when nothing is declared — for `ui_qml` that is a
+/// legitimate QML-only plugin, and for anything else it is a malformed one. We
+/// do not guess either way.
+QString resolveBackendLib(const QString& dir,
+                          const QJsonObject& metadata,
+                          const QJsonObject& manifest)
+{
+    const QString variant = [&] {
+        QFile f(dir + "/variant");
+        if (!f.open(QIODevice::ReadOnly)) return QString();
+        return QString::fromUtf8(f.readAll()).trimmed();
+    }();
+
+    // 1. manifest.json — a real filename. An object is keyed by variant; prefer
+    // the variant actually installed here, then any listed one present on disk.
+    const QJsonValue manifestMain = manifest.value("main");
+    if (manifestMain.isObject()) {
+        const QJsonObject byVariant = manifestMain.toObject();
+        QStringList keys;
+        if (!variant.isEmpty() && byVariant.contains(variant)) keys << variant;
+        for (const QString& k : byVariant.keys())
+            if (k != variant) keys << k;
+        for (const QString& k : keys) {
+            const QString file = byVariant.value(k).toString();
+            if (file.isEmpty()) continue;
+            const QString path = dir + "/" + file;
+            if (QFile::exists(path)) return path;
+        }
+        return QString();
+    }
+    if (manifestMain.isString() && !manifestMain.toString().isEmpty()) {
+        const QString path = dir + "/" + manifestMain.toString();
+        return QFile::exists(path) ? path : QString();
+    }
+
+    // 2. metadata.json — a LOGICAL name ("signer_ui_plugin"), carrying neither
+    // the platform prefix nor the suffix, so it has to be spelled out.
+    const QString name = metadata.value("main").toString().trimmed();
+    if (name.isEmpty()) return QString();
+    for (const QString& candidate : {
+#if defined(Q_OS_WIN)
+             name + ".dll", "lib" + name + ".dll",
+#elif defined(Q_OS_MAC)
+             name + ".dylib", "lib" + name + ".dylib",
+#else
+             "lib" + name + ".so", name + ".so",
+#endif
+         }) {
+        const QString path = dir + "/" + candidate;
+        if (QFile::exists(path)) return path;
+    }
+    return QString();
+}
+
+} // namespace
 
 MainWindow::MainWindow(const QString& pluginPath,
                        const QString& title,
@@ -150,14 +220,20 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
     // Package directory path — look for metadata.json / manifest.json.
     // Prefer metadata.json (plain format used by individual plugin repos);
     // fall back to manifest.json (platform-map format used in the standalone plugins/ dir).
-    QJsonObject pluginInfo;
-    for (const QString& name : {QString("metadata.json"), QString("manifest.json")}) {
+    //
+    // BOTH are read, not just the first found: the two disagree about what
+    // `main` means. metadata.json carries a logical name ("signer_ui_plugin"),
+    // manifest.json the actual filename keyed by variant. resolveBackendLib()
+    // needs whichever is present, and the installed tree ships both.
+    auto readJson = [&](const QString& name) {
         QFile f(resolvedPath + "/" + name);
-        if (f.open(QIODevice::ReadOnly)) {
-            pluginInfo = QJsonDocument::fromJson(f.readAll()).object();
-            break;
-        }
-    }
+        return f.open(QIODevice::ReadOnly)
+                   ? QJsonDocument::fromJson(f.readAll()).object()
+                   : QJsonObject();
+    };
+    const QJsonObject metadataJson = readJson(QStringLiteral("metadata.json"));
+    const QJsonObject manifestJson = readJson(QStringLiteral("manifest.json"));
+    QJsonObject pluginInfo = metadataJson.isEmpty() ? manifestJson : metadataJson;
     if (pluginInfo.isEmpty()) {
         qWarning() << "No metadata.json or manifest.json in plugin directory:" << resolvedPath;
     } else {
@@ -192,12 +268,9 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
             if (viewField.isEmpty()) {
                 qWarning() << "ui_qml module missing required 'view' field:" << resolvedPath;
             } else {
-                // Discover a backend plugin library, if any, in the install dir.
-                QStringList libs = QDir(resolvedPath).entryList(
-                    {"*.dylib", "*.so", "*.dll"}, QDir::Files);
-                if (!libs.isEmpty()) {
-                    pluginSoPath = resolvedPath + "/" + libs.first();
-                }
+                // The backend the plugin DECLARES. Empty is normal here: a
+                // QML-only ui_qml plugin ships no backend at all.
+                pluginSoPath = resolveBackendLib(resolvedPath, metadataJson, manifestJson);
                 qmlViewPath = resolvedPath + "/" + viewField;
 
                 // DEV_QML_PATH: load QML from a source directory instead of the
@@ -331,12 +404,13 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
             }
         } else if (type == "ui") {
             // Legacy dylib plugin (pure C++ IComponent, no QML view)
-            QStringList libs = QDir(resolvedPath).entryList(
-                {"*.dylib", "*.so", "*.dll"}, QDir::Files);
-            if (libs.isEmpty()) {
-                qWarning() << "No shared library found in plugin directory:" << resolvedPath;
+            const QString dylibPath =
+                resolveBackendLib(resolvedPath, metadataJson, manifestJson);
+            if (dylibPath.isEmpty()) {
+                // A legacy `ui` plugin IS its library, so an undeclared one is
+                // malformed. Refuse rather than guess at a file in the directory.
+                qWarning() << "Plugin declares no resolvable 'main' library:" << resolvedPath;
             } else {
-                QString dylibPath = resolvedPath + "/" + libs.first();
                 QPluginLoader loader(dylibPath);
                 if (!loader.load()) {
                     qWarning() << "Failed to load plugin:" << loader.errorString();

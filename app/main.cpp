@@ -22,7 +22,16 @@ extern "C" {
     void logos_core_set_persistence_base_path(const char* path);
     void logos_core_start();
     void logos_core_cleanup();
-    int logos_core_load_module(const char* module_name, bool with_dependencies);
+    // Mirrors logos_core.h. The enum replaced a `bool with_dependencies`, and
+    // under C linkage the symbol mangles the same either way — so this
+    // declaration going stale would compile AND link, and pass a bool where an
+    // enum is read. Kept in step deliberately; see the note on LogosLoadDeps.
+    typedef enum {
+        LOGOS_LOAD_MODULE_ONLY = 0,
+        LOGOS_LOAD_REQUIRED_DEPS = 1,
+        LOGOS_LOAD_REQUIRED_AND_OPTIONAL = 2,
+    } LogosLoadDeps;
+    int logos_core_load_module(const char* module_name, LogosLoadDeps deps);
 }
 
 // Find and read metadata.json for a plugin path.
@@ -166,7 +175,7 @@ int main(int argc, char* argv[])
 
     // Load any additional modules requested via --load
     for (const QString& module : parser.values(loadOption)) {
-        if (logos_core_load_module(module.toUtf8().constData(), false)) {
+        if (logos_core_load_module(module.toUtf8().constData(), LOGOS_LOAD_MODULE_ONLY)) {
             qInfo() << "Loaded module:" << module;
         } else {
             qWarning() << "Warning: failed to load module:" << module;

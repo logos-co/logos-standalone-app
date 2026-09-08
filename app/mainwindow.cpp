@@ -28,7 +28,15 @@
 #include "logos_consumer.h"
 
 extern "C" {
-    int logos_core_load_module(const char* module_name, bool with_dependencies);
+    // Mirrors logos_core.h, and must stay in step: under C linkage a stale
+    // declaration here would compile AND link, passing a bool where an enum is
+    // read. app/main.cpp carries the same block for the same reason.
+    typedef enum {
+        LOGOS_LOAD_MODULE_ONLY = 0,
+        LOGOS_LOAD_REQUIRED_DEPS = 1,
+        LOGOS_LOAD_REQUIRED_AND_OPTIONAL = 2,
+    } LogosLoadDeps;
+    int logos_core_load_module(const char* module_name, LogosLoadDeps deps);
 }
 
 namespace {
@@ -241,7 +249,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
 
         // Load backend dependencies declared in metadata before showing the UI,
         // mirroring logos-app's MainUIBackend::loadUiModule() dependency handling.
-        // Uses logos_core_load_module(name, true) to automatically resolve
+        // Uses logos_core_load_module(name, LOGOS_LOAD_REQUIRED_DEPS) to resolve
         // and load transitive dependencies in the correct order. An entry is
         // either a bare name or an object holding that name alongside the
         // constraints an installer resolves it by.
@@ -249,7 +257,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
             QString depName = dep.isObject() ? dep.toObject().value("name").toString()
                                              : dep.toString();
             if (depName.isEmpty()) continue;
-            if (logos_core_load_module(depName.toUtf8().constData(), true)) {
+            if (logos_core_load_module(depName.toUtf8().constData(), LOGOS_LOAD_REQUIRED_DEPS)) {
                 qInfo() << "Loaded dependency (with transitive deps):" << depName;
             } else {
                 qWarning() << "Failed to load dependency:" << depName;

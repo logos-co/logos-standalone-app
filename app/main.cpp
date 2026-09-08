@@ -17,22 +17,14 @@
 #include <QStandardPaths>
 #include <QStyleHints>
 
-extern "C" {
-    void logos_core_add_modules_dir(const char* modules_dir);
-    void logos_core_set_persistence_base_path(const char* path);
-    void logos_core_start();
-    void logos_core_cleanup();
-    // Mirrors logos_core.h. The enum replaced a `bool with_dependencies`, and
-    // under C linkage the symbol mangles the same either way — so this
-    // declaration going stale would compile AND link, and pass a bool where an
-    // enum is read. Kept in step deliberately; see the note on LogosLoadDeps.
-    typedef enum {
-        LOGOS_LOAD_MODULE_ONLY = 0,
-        LOGOS_LOAD_REQUIRED_DEPS = 1,
-        LOGOS_LOAD_REQUIRED_AND_OPTIONAL = 2,
-    } LogosLoadDeps;
-    int logos_core_load_module(const char* module_name, LogosLoadDeps deps);
-}
+// The core C API, through logos-cpp-sdk's wrapper rather than a prototype
+// block of our own. This app used to hand-copy the declarations in TWO files,
+// which is the shape that does not fail loudly: under C linkage the symbol
+// mangles the same whatever the parameter types are, so a stale copy keeps
+// compiling AND linking while passing the wrong thing. The mirror still
+// exists — liblogos depends on logos-cpp-sdk, so that header cannot include
+// liblogos' own — but now it exists ONCE, where it is tested.
+#include "logos_host_core.h"
 
 // Find and read metadata.json for a plugin path.
 // For directories: looks inside the directory.
@@ -161,21 +153,26 @@ int main(int argc, char* argv[])
     }
     qInfo() << "Session directory:" << userDir;
 
-    // Setup logos core
-    logos_core_add_modules_dir(modulesDir.toUtf8().constData());
-
+    // Setup logos core. Everything that must happen BEFORE start goes through
+    // the config: the type folds that ordering into its constructor, so the
+    // illegal sequence is unrepresentable rather than merely commented.
+    logos::host::LogosCore::Config coreConfig;
+    coreConfig.modulesDirs = { modulesDir.toStdString() };
     // Each module instance is handed <session dir>/module_data/<module>/<instance>
-    // as its storage location. Must be set before logos_core_start().
+    // as its storage location.
     const QString moduleDataDir = userDir + "/module_data";
-    logos_core_set_persistence_base_path(moduleDataDir.toUtf8().constData());
+    coreConfig.persistenceBasePath = moduleDataDir.toStdString();
 
-    logos_core_start();
+    // Destroyed at the end of main, AFTER app.exec() returns — the dtor is the
+    // logos_core_cleanup() that used to sit there explicitly.
+    logos::host::LogosCore core(argc, argv, std::move(coreConfig));
+    core.start();
     qInfo() << "Logos Core started (modules dir:" << modulesDir << ")";
 
 
     // Load any additional modules requested via --load
     for (const QString& module : parser.values(loadOption)) {
-        if (logos_core_load_module(module.toUtf8().constData(), LOGOS_LOAD_MODULE_ONLY)) {
+        if (core.loadModule(module.toStdString(), LOGOS_LOAD_MODULE_ONLY)) {
             qInfo() << "Loaded module:" << module;
         } else {
             qWarning() << "Warning: failed to load module:" << module;
@@ -213,7 +210,7 @@ int main(int argc, char* argv[])
     int width = parser.value(widthOption).toInt();
     int height = parser.value(heightOption).toInt();
 
-    MainWindow window(pluginPath, title, width, height);
+    MainWindow window(core, pluginPath, title, width, height);
     window.show();
 
 #ifdef ENABLE_QML_INSPECTOR
@@ -221,7 +218,5 @@ int main(int argc, char* argv[])
     InspectorServer::attach(&window);
 #endif
 
-    int result = app.exec();
-    logos_core_cleanup();
-    return result;
+    return app.exec();
 }

@@ -239,15 +239,15 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
 
         // Load backend dependencies declared in metadata before showing the UI,
         // mirroring logos-app's MainUIBackend::loadUiModule() dependency handling.
-        // Uses loadModule(name, LOGOS_LOAD_REQUIRED_DEPS) to resolve and load
-        // transitive dependencies in the correct order. An entry is
+        // Resolves and loads transitive dependencies in the correct order,
+        // plus any optional ones that happen to be installed. An entry is
         // either a bare name or an object holding that name alongside the
         // constraints an installer resolves it by.
         for (const QJsonValue& dep : pluginInfo.value("dependencies").toArray()) {
             QString depName = dep.isObject() ? dep.toObject().value("name").toString()
                                              : dep.toString();
             if (depName.isEmpty()) continue;
-            if (m_core.loadModule(depName.toStdString(), LOGOS_LOAD_REQUIRED_DEPS)) {
+            if (m_core.loadModule(depName.toStdString(), LOGOS_LOAD_REQUIRED_AND_OPTIONAL)) {
                 qInfo() << "Loaded dependency (with transitive deps):" << depName;
             } else {
                 qWarning() << "Failed to load dependency:" << depName;

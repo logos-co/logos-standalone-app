@@ -170,9 +170,10 @@ int main(int argc, char* argv[])
     qInfo() << "Logos Core started (modules dir:" << modulesDir << ")";
 
 
-    // Load any additional modules requested via --load
+    // Load any additional modules requested via --load, each with its
+    // dependency closure — a backend module without its deps cannot serve.
     for (const QString& module : parser.values(loadOption)) {
-        if (core.loadModule(module.toStdString(), LOGOS_LOAD_MODULE_ONLY)) {
+        if (core.loadModule(module.toStdString(), LOGOS_LOAD_REQUIRED_AND_OPTIONAL)) {
             qInfo() << "Loaded module:" << module;
         } else {
             qWarning() << "Warning: failed to load module:" << module;

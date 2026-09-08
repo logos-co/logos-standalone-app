@@ -27,10 +27,6 @@
 #include "logos_api.h"
 #include "logos_consumer.h"
 
-extern "C" {
-    int logos_core_load_module(const char* module_name, bool with_dependencies);
-}
-
 namespace {
 
 /// The backend library a plugin DECLARES, or nothing.
@@ -99,12 +95,14 @@ QString resolveBackendLib(const QString& dir,
 
 } // namespace
 
-MainWindow::MainWindow(const QString& pluginPath,
+MainWindow::MainWindow(logos::host::LogosCore& core,
+                       const QString& pluginPath,
                        const QString& title,
                        int width,
                        int height,
                        QWidget* parent)
     : QMainWindow(parent)
+    , m_core(core)
 {
     setWindowTitle(title.isEmpty() ? QFileInfo(pluginPath).baseName() : title);
     setupUi(pluginPath, width, height);
@@ -241,15 +239,15 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
 
         // Load backend dependencies declared in metadata before showing the UI,
         // mirroring logos-app's MainUIBackend::loadUiModule() dependency handling.
-        // Uses logos_core_load_module(name, true) to automatically resolve
-        // and load transitive dependencies in the correct order. An entry is
+        // Uses loadModule(name, LOGOS_LOAD_REQUIRED_DEPS) to resolve and load
+        // transitive dependencies in the correct order. An entry is
         // either a bare name or an object holding that name alongside the
         // constraints an installer resolves it by.
         for (const QJsonValue& dep : pluginInfo.value("dependencies").toArray()) {
             QString depName = dep.isObject() ? dep.toObject().value("name").toString()
                                              : dep.toString();
             if (depName.isEmpty()) continue;
-            if (logos_core_load_module(depName.toUtf8().constData(), true)) {
+            if (m_core.loadModule(depName.toStdString(), LOGOS_LOAD_REQUIRED_DEPS)) {
                 qInfo() << "Loaded dependency (with transitive deps):" << depName;
             } else {
                 qWarning() << "Failed to load dependency:" << depName;

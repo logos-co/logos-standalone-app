@@ -6,6 +6,8 @@
 
 // logos::ConsumerIdentity — what logos::admitConsumer hands back.
 #include "logos_consumer.h"
+// logos::host::LogosCore — the core handle main() owns and this window borrows.
+#include "logos_host_core.h"
 
 class LogosAPI;
 class LogosQmlBridge;
@@ -15,7 +17,12 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(const QString& pluginPath,
+    // `core` is BORROWED, not owned: main() constructs exactly one and outlives
+    // this window. Taken as a reference rather than reached through a free
+    // function so this file no longer re-declares the C API — that copy was the
+    // second of two, and a stale one links silently.
+    explicit MainWindow(logos::host::LogosCore& core,
+                        const QString& pluginPath,
                         const QString& title = QString(),
                         int width = 1024,
                         int height = 768,
@@ -23,6 +30,8 @@ public:
     ~MainWindow() = default;
 
 private:
+    logos::host::LogosCore& m_core;
+
     void setupUi(const QString& pluginPath, int width, int height);
     QWidget* loadQmlView(const QString& baseDir, const QString& qmlFile, LogosQmlBridge* bridge);
     QWidget* loadLegacyWidget(QObject* plugin, const QString& identity);

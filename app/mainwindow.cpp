@@ -35,8 +35,8 @@ namespace {
 /// alphabetically first file, since QDir sorts by name. A plugin that ships any
 /// other library alongside its own (an external dependency, a replica factory)
 /// could therefore hand ui-host a library that is not a Qt plugin at all, and
-/// the view would never render. `signer_ui` ships two and worked only because
-/// `signer_ui_plugin` sorts before `signer_ui_replica_factory`.
+/// the view would never render. `evm_signer_ui` ships two and worked only because
+/// `evm_signer_ui_plugin` sorts before `evm_signer_ui_replica_factory`.
 ///
 /// Mirrors lgpm's resolveMainFilePath(), which is what Basecamp already gets its
 /// path from. Returns empty when nothing is declared — for `ui_qml` that is a
@@ -74,7 +74,7 @@ QString resolveBackendLib(const QString& dir,
         return QFile::exists(path) ? path : QString();
     }
 
-    // 2. metadata.json — a LOGICAL name ("signer_ui_plugin"), carrying neither
+    // 2. metadata.json — a LOGICAL name ("evm_signer_ui_plugin"), carrying neither
     // the platform prefix nor the suffix, so it has to be spelled out.
     const QString name = metadata.value("main").toString().trimmed();
     if (name.isEmpty()) return QString();
@@ -220,7 +220,7 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
     // fall back to manifest.json (platform-map format used in the standalone plugins/ dir).
     //
     // BOTH are read, not just the first found: the two disagree about what
-    // `main` means. metadata.json carries a logical name ("signer_ui_plugin"),
+    // `main` means. metadata.json carries a logical name ("evm_signer_ui_plugin"),
     // manifest.json the actual filename keyed by variant. resolveBackendLib()
     // needs whichever is present, and the installed tree ships both.
     auto readJson = [&](const QString& name) {

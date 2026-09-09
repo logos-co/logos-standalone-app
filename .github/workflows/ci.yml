@@ -60,3 +60,17 @@ jobs:
       run: |
         nix build '.#checks.${{ matrix.arch }}.symbol-gate' --print-build-logs
         nix build '.#checks.${{ matrix.arch }}.symbol-gate-negative' --print-build-logs
+
+    # The gate above reads what we SHIP -- one liblogos_protocol in $out/lib --
+    # which stays true while qt-host was compiled against a second one that only
+    # the closure names. That is the gap that heap-corrupts every getClient().
+    # The rule lives in logos-protocol, where the ABI is owned; run it from the
+    # revision we lock, not master, so the check and the build agree.
+    - name: qt-host/protocol pairing
+      run: |
+        nix build ".#packages.${{ matrix.arch }}.abi-subject" -o result-abi-subject --print-build-logs
+        # Resolve the ROOT logos-protocol edge. The flat node of that name
+        # belongs to whichever edge claimed it first, which is not ours.
+        rev=$(nix flake metadata --json |
+          jq -r '.locks as $l | $l.nodes[$l.nodes[$l.root].inputs["logos-protocol"]].locked.rev')
+        nix run "github:logos-co/logos-protocol/$rev#abi-closure-check" -- ./result-abi-subject

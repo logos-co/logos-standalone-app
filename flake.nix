@@ -11,6 +11,21 @@
       logos-design-system.url = "github:logos-co/logos-design-system";
       logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
+
+      # ONE logos-protocol, and ONE logos-qt-host, in what we ship. qt-host
+      # bakes sizeof(LogosAPIClient) into its own `operator new` while
+      # logos-protocol DEFINES that constructor, so a second protocol here is
+      # an 8-byte heap overrun on every getClient() -- silent on macOS, where
+      # the undersized request rounds up into the next malloc size class, and
+      # fatal on glibc. The two are an ABI pair, not a version preference.
+      logos-cpp-sdk.inputs.logos-protocol.follows = "logos-protocol";
+      logos-plugin-qt.inputs.logos-protocol.follows = "logos-protocol";
+      logos-liblogos.inputs.logos-protocol.follows = "logos-protocol";
+      logos-liblogos.inputs.logos-plugin-qt.follows = "logos-plugin-qt";
+      logos-liblogos.inputs.logos-cpp-sdk.follows = "logos-cpp-sdk";
+      logos-view-module-runtime.inputs.logos-protocol.follows = "logos-protocol";
+      logos-view-module-runtime.inputs.logos-plugin-qt.follows = "logos-plugin-qt";
+      logos-view-module-runtime.inputs.logos-cpp-sdk.follows = "logos-cpp-sdk";
     };
 
     outputs = { self, nixpkgs, logos-nix, logos-cpp-sdk, logos-protocol, logos-plugin-qt, logos-liblogos, logos-design-system, logos-view-module-runtime, logos-qt-mcp }:
@@ -54,6 +69,17 @@
             symbol-gate-negative = import ./nix/symbol-gate.nix {
               inherit pkgs; appPkg = app; negativeControl = true;
             };
+
+            # What symbol-gate cannot see: it reads what we SHIP -- one
+            # liblogos_protocol in $out/lib -- which stays true while qt-host
+            # was built against a second one that only the closure names. The
+            # app rewrites install names as it stages lib/, so its own closure
+            # names neither library; this is the input set it compiles and
+            # links against, as one closure for logos-protocol to assert on.
+            abi-subject = pkgs.writeText "logos-standalone-app-abi-subject"
+              (pkgs.lib.concatStringsSep "\n" [
+                logosSdk logosProtocolPkg logosQtHost logosLiblogos logosViewModuleRuntime
+              ]);
 
             # MCP server (Node.js) for connecting Claude Code / MCP clients
             mcp-server = logos-qt-mcp.packages.${pkgs.system}.mcp-server;

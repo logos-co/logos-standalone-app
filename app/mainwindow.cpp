@@ -239,10 +239,14 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
 
         // Load backend dependencies declared in metadata before showing the UI,
         // mirroring logos-app's MainUIBackend::loadUiModule() dependency handling.
-        // Resolves and loads transitive dependencies in the correct order,
-        // plus any optional ones that happen to be installed. An entry is
-        // either a bare name or an object holding that name alongside the
-        // constraints an installer resolves it by.
+        // Resolves and loads transitive dependencies in the correct order. An
+        // entry is either a bare name or an object holding that name alongside
+        // the constraints an installer resolves it by.
+        //
+        // REQUIRED_AND_OPTIONAL widens the walk rooted at each name below, so a
+        // dependency brings its own optional collaborators. It says nothing
+        // about THIS plugin's optional edges -- those are never a root of that
+        // expansion, and are loaded separately after this loop.
         for (const QJsonValue& dep : pluginInfo.value("dependencies").toArray()) {
             QString depName = dep.isObject() ? dep.toObject().value("name").toString()
                                              : dep.toString();
@@ -251,6 +255,23 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                 qInfo() << "Loaded dependency (with transitive deps):" << depName;
             } else {
                 qWarning() << "Failed to load dependency:" << depName;
+            }
+        }
+
+        // The plugin's OWN optional dependencies, best-effort: it declared it
+        // does not need these, so an absent or broken one must not stop the
+        // view. metadata.json and manifest.json both spell the key
+        // `optional_dependencies`; the plugin's own file is read here, not the
+        // package manager's camelCase projection.
+        for (const QJsonValue& dep : pluginInfo.value("optional_dependencies").toArray()) {
+            QString depName = dep.isObject() ? dep.toObject().value("name").toString()
+                                             : dep.toString();
+            if (depName.isEmpty()) continue;
+            if (m_core.loadModule(depName.toStdString(), LOGOS_LOAD_REQUIRED_AND_OPTIONAL)) {
+                qInfo() << "Loaded optional dependency:" << depName;
+            } else {
+                qInfo() << "Optional dependency" << depName
+                        << "is unavailable; continuing without it";
             }
         }
 

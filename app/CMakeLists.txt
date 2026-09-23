@@ -97,8 +97,6 @@ add_executable(logos-standalone-app
     main.cpp
     mainwindow.cpp
     mainwindow.h
-    QmlLiveView.cpp
-    QmlLiveView.h
 )
 
 if(ENABLE_QML_INSPECTOR)
@@ -118,7 +116,7 @@ target_link_libraries(logos-standalone-app PRIVATE
     # The SHARED Qt host runtime, not the static archive.
     #
     # This app loads third-party plugins IN-PROCESS (QPluginLoader, see
-    # mainwindow.cpp's loadLegacyWidget / apiForPlugin), so the types that must
+    # logos-view-module-runtime's UiPluginLoader), so the types that must
     # exist exactly once per process -- TokenManager, the per-identity
     # StoreRegistry, LogosAPI -- must come from ONE image. Linking the static
     # archive gave this exe its own copy of every function-local static inside

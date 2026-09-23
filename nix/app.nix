@@ -173,6 +173,21 @@ EOF
       for f in "${logosLiblogos}"/lib/*; do
         [ -f "$f" ] && cp -L "$f" "$out/lib/" || true
       done
+      # The Qt host runtime this app links (TokenManager, LogosAPI), from its
+      # own inputs: liblogos' Qt-free core does not ship it. -f replaces a copy
+      # the loop above staged read-only.
+      _qtrt=0
+      for f in "${logosProtocolPkg}"/lib/liblogos_protocol.* "${logosQtHost}"/lib/liblogos_qt_host.*; do
+        case "$f" in *.a|*.la) continue ;; esac
+        if [ -f "$f" ]; then
+          cp -Lf "$f" "$out/lib/"
+          _qtrt=$((_qtrt + 1))
+        fi
+      done
+      if [ "$_qtrt" -lt 2 ]; then
+        echo "ERROR: staged $_qtrt of liblogos_protocol / liblogos_qt_host into $out/lib" >&2
+        exit 1
+      fi
       ls "${logosSdk}/lib/"liblogos_sdk.* >/dev/null 2>&1 && \
         cp -L "${logosSdk}/lib/"liblogos_sdk.* "$out/lib/" || true
 

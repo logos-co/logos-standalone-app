@@ -25,6 +25,7 @@
 // exists — liblogos depends on logos-cpp-sdk, so that header cannot include
 // liblogos' own — but now it exists ONCE, where it is tested.
 #include "logos_host_core.h"
+#include "QtCoreTokens.h"
 
 // Find and read metadata.json for a plugin path.
 // For directories: looks inside the directory.
@@ -162,6 +163,8 @@ int main(int argc, char* argv[])
     // as its storage location.
     const QString moduleDataDir = userDir + "/module_data";
     coreConfig.persistenceBasePath = moduleDataDir.toStdString();
+    // Core's module tokens, into the store this app's LogosAPI reads.
+    coreConfig.tokenListener = logos::ui::saveCoreTokenToQtStore;
 
     // Destroyed at the end of main, AFTER app.exec() returns — the dtor is the
     // logos_core_cleanup() that used to sit there explicitly.

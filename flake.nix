@@ -4,12 +4,15 @@
     inputs = {
       logos-nix.url = "github:logos-co/logos-nix";
       nixpkgs.follows = "logos-nix/nixpkgs";
-      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk";
+      # Back to master once logos-co/logos-cpp-sdk#167 merges.
+      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/feat/core-token-listener";
       logos-protocol.url = "github:logos-co/logos-protocol";
       logos-plugin-qt.url = "github:logos-co/logos-plugin-qt";
-      logos-liblogos.url = "github:logos-co/logos-liblogos";
+      # Back to master once logos-co/logos-liblogos#224 merges.
+      logos-liblogos.url = "github:logos-co/logos-liblogos/feat/core-token-listener";
       logos-design-system.url = "github:logos-co/logos-design-system";
-      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime";
+      # Back to master once logos-co/logos-view-module-runtime#36 merges.
+      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/feat/ui-host-library";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
 
       # ONE logos-protocol, and ONE logos-qt-host, in what we ship. qt-host

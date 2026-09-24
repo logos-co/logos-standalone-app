@@ -1,68 +1,37 @@
 #pragma once
 
-#include <QHash>
 #include <QMainWindow>
 #include <QString>
 
-// logos::ConsumerIdentity — what logos::admitConsumer hands back.
-#include "logos_consumer.h"
 // logos::host::LogosCore — the core handle main() owns and this window borrows.
 #include "logos_host_core.h"
 
 class LogosAPI;
-class LogosQmlBridge;
+namespace logos::ui { class UiPluginLoader; }
 
+// One UI plugin in a window. Loading is logos-view-module-runtime's
+// UiPluginLoader, the pipeline Basecamp runs too: the plugin's dependencies,
+// its own admitted identity, then its widget or sandboxed QML view.
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    // `core` is BORROWED, not owned: main() constructs exactly one and outlives
-    // this window. Taken as a reference rather than reached through a free
-    // function so this file no longer re-declares the C API — that copy was the
-    // second of two, and a stale one links silently.
+    // `core` is BORROWED: main() constructs exactly one and outlives this window.
     explicit MainWindow(logos::host::LogosCore& core,
                         const QString& pluginPath,
                         const QString& title = QString(),
                         int width = 1024,
                         int height = 768,
                         QWidget* parent = nullptr);
-    ~MainWindow() = default;
+    ~MainWindow() override = default;
 
 private:
+    void showMessage(const QString& text);
+
     logos::host::LogosCore& m_core;
-
-    void setupUi(const QString& pluginPath, int width, int height);
-    QWidget* loadQmlView(const QString& baseDir, const QString& qmlFile, LogosQmlBridge* bridge);
-    QWidget* loadLegacyWidget(QObject* plugin, const QString& identity);
-
-    // ── identities ──────────────────────────────────────────────────────
-    //
-    // The host's own channel. "standalone" is this process speaking as itself:
-    // it is the trusted core/capability channel informModuleToken requires, and
-    // it keeps the host's ambient token ring. Only the host uses it.
-    LogosAPI* hostApi();
-
-    // The plugin's channel. logos::admitConsumer gives it an ISOLATED token
-    // store, mints a credential, registers that credential with
-    // capability_module over hostApi()'s trusted channel, and installs it — in
-    // that order. Without the store the plugin inherits the host's ring, which
-    // held every loaded module's root token and made every plugin able to call
-    // every module with no capability handshake; without the credential it
-    // holds nothing it is entitled to and can call nothing.
-    //
-    // THIS USED TO BE TWO PRIVATE HELPERS spelled out here and again —
-    // differently — in logos-basecamp. The divergence was not cosmetic: this
-    // file called registerPluginIdentity BEFORE apiForPlugin in the backend
-    // branch, i.e. it registered a credential at capability_module before the
-    // identity's store existed. That was harmless only because the credential
-    // was discarded either way. There is now one implementation and no order
-    // for a host to get wrong.
-    //
-    // A falsy ConsumerIdentity is fatal for the plugin rather than a cue to
-    // fall back to hostApi().
-    logos::ConsumerIdentity consumerFor(const QString& name);
-
+    // This process speaking as itself: the trusted channel admission registers
+    // each plugin's credential over. Plugins never get it.
     LogosAPI* m_hostApi = nullptr;
-    QHash<QString, logos::ConsumerIdentity> m_consumers;
+    logos::ui::UiPluginLoader* m_loader = nullptr;
 };

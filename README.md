@@ -81,41 +81,42 @@ under either host.
 
 ## Plugin Metadata
 
-When given a plugin directory, the app reads `metadata.json` (or `manifest.json`) to determine the plugin type and auto-load declared dependencies before the UI is shown.
+Plugins load through logos-view-module-runtime's `UiPluginLoader`, the same
+pipeline Logos Basecamp uses, so a plugin behaves here as it does there. Given a
+plugin directory, the app reads `metadata.json` (and `manifest.json`, which names
+the library per platform variant) for the plugin's type and dependencies.
 
-**View module** (C++ backend + QML view, process-isolated):
+**QML view** (`ui_qml`): `view` is the QML entry point. If the plugin declares a
+backend library in `main`, it runs in a separate `ui-host` process; the view runs
+in the same QML sandbox as in Basecamp (no network, no files outside the plugin,
+no native plugins of its own).
 ```json
 {
   "name": "calc_ui",
-  "type": "ui",
+  "type": "ui_qml",
   "view": "qml/Main.qml",
+  "main": "calc_ui_plugin",
   "dependencies": ["calc_module"]
 }
 ```
 
-**Pure QML plugin**:
+**Legacy widget plugin** (`ui`): `main` names the Qt plugin library, which builds
+a widget in-process through `createWidget(LogosAPI*)`.
 ```json
 {
-  "type": "ui_qml",
-  "main": "Main.qml",
-  "dependencies": ["waku_module", "chat"]
-}
-```
-
-**Legacy dylib plugin** (`type: "ui"` without `"view"`, or a raw `.dylib`/`.so` file):
-```json
-{
+  "name": "chat_ui",
   "type": "ui",
+  "main": "chat_ui_plugin",
   "dependencies": ["capability_module"]
 }
 ```
 
-The app determines the loading strategy from these fields:
-1. `type: "ui"` + `"view"` present → view module (spawn `ui-host`, load QML view)
-2. `type: "ui"` without `"view"` → legacy dylib (load via `QPluginLoader`, call `createWidget`)
-3. `type: "ui_qml"` → pure QML (load into `QQuickWidget`)
+A raw `.dylib`/`.so`/`.dll` passed instead of a directory is loaded as a legacy
+plugin without a metadata file.
 
-When a raw `.dylib`/`.so`/`.dll` file is passed directly (instead of a directory), the app loads it via `QPluginLoader` without requiring a metadata file.
+`dependencies` load before the UI is shown, each with its own optional
+collaborators, and one that fails to load fails the plugin, as in Basecamp.
+`optional_dependencies` are best-effort.
 
 ### Icon support
 

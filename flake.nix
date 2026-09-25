@@ -4,15 +4,16 @@
     inputs = {
       logos-nix.url = "github:logos-co/logos-nix";
       nixpkgs.follows = "logos-nix/nixpkgs";
-      # Back to master once logos-co/logos-cpp-sdk#167 merges.
-      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/feat/core-token-listener";
-      logos-protocol.url = "github:logos-co/logos-protocol";
-      logos-plugin-qt.url = "github:logos-co/logos-plugin-qt";
-      # Back to master once logos-co/logos-liblogos#224 merges.
-      logos-liblogos.url = "github:logos-co/logos-liblogos/feat/core-token-listener";
+      # The runtime-control wave: the app is the "standalone" shell of a runtime
+      # whose capability_module is the token authority. Each input goes back to
+      # master as its PR merges (cpp-sdk#169, protocol#97, plugin-qt#48,
+      # liblogos#227, view-module-runtime#36 and #37).
+      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/feat/core-service-client";
+      logos-protocol.url = "github:logos-co/logos-protocol/feat/plain-local-inproc";
+      logos-plugin-qt.url = "github:logos-co/logos-plugin-qt/feat/consumer-adoption-only";
+      logos-liblogos.url = "github:logos-co/logos-liblogos/feat/embedded-core-service";
       logos-design-system.url = "github:logos-co/logos-design-system";
-      # Back to master once logos-co/logos-view-module-runtime#36 merges.
-      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/feat/ui-host-library";
+      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/feat/admit-through-core-service";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
 
       # ONE logos-protocol, and ONE logos-qt-host, in what we ship. qt-host

@@ -32,6 +32,5 @@ private:
     logos::host::LogosCore& m_core;
     // This process speaking as itself: the trusted channel admission registers
     // each plugin's credential over. Plugins never get it.
-    LogosAPI* m_hostApi = nullptr;
     logos::ui::UiPluginLoader* m_loader = nullptr;
 };

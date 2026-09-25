@@ -8,10 +8,10 @@
       # whose capability_module is the token authority. Each input goes back to
       # master as its PR merges (cpp-sdk#169, protocol#97, plugin-qt#48,
       # liblogos#227, view-module-runtime#36 and #37).
-      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/feat/drop-legacy-mode";
+      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/feat/runtime-process";
       logos-protocol.url = "github:logos-co/logos-protocol/feat/drop-legacy-mode";
       logos-plugin-qt.url = "github:logos-co/logos-plugin-qt/feat/drop-legacy-mode";
-      logos-liblogos.url = "github:logos-co/logos-liblogos/feat/drop-legacy-mode";
+      logos-liblogos.url = "github:logos-co/logos-liblogos/feat/runtime-process";
       logos-design-system.url = "github:logos-co/logos-design-system";
       logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/feat/drop-legacy-mode";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";

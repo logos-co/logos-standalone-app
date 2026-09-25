@@ -5,6 +5,7 @@
 #endif
 
 #include <QApplication>
+#include <QMetaObject>
 #include <QCommandLineParser>
 #include <QCommandLineOption>
 #include <QDebug>
@@ -167,9 +168,16 @@ int main(int argc, char* argv[])
         QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules").toStdString()};
     coreConfig.shellName = "standalone";
 
-    // Destroyed at the end of main, AFTER app.exec() returns — the dtor is the
-    // logos_core_cleanup() that used to sit there explicitly.
+    // Destroyed at the end of main, AFTER app.exec() returns; the dtor stops the
+    // runtime, which runs in a process of its own.
     logos::host::LogosCore core(argc, argv, std::move(coreConfig));
+    // Without it nothing answers the plugin, so the app goes too.
+    core.onRuntimeExit([&app](const std::string& reason) {
+        QMetaObject::invokeMethod(&app, [reason]() {
+            qCritical().noquote() << "The Logos runtime stopped:" << QString::fromStdString(reason);
+            QCoreApplication::exit(1);
+        }, Qt::QueuedConnection);
+    });
     // Without its token authority (capability_module, bundled beside the app)
     // nothing could load, so the app does not go on.
     try {

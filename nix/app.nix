@@ -162,8 +162,9 @@ exec "$out/bin/.logos-standalone-app-bin" "\$@"
 EOF
       chmod +x "$out/bin/logos-standalone-app"
 
-      # Every module host liblogos ships; a plain module runs in logos_host_plain.
-      for _host in logos_host logos_host_plain; do
+      # logos_runtime, which the app spawns, and every module host liblogos
+      # ships (a plain module runs in logos_host_plain).
+      for _host in logos_runtime logos_host logos_host_plain; do
         if [ -f "${logosLiblogos}/bin/$_host" ]; then
           cp -L "${logosLiblogos}/bin/$_host" "$out/bin/"
         fi

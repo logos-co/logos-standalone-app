@@ -19,14 +19,15 @@
 # THE IN-PROCESS IMAGE SET — this scoping IS the correctness of the gate:
 #   IN   bin/logos-standalone-app     the app
 #   IN   lib/liblogos_*.{dylib,so}    the runtime it links
-#   OUT  bin/logos_host, bin/ui-host  SEPARATE PROCESSES. Measured here: they
+#   OUT  bin/logos_runtime, bin/logos_host, bin/ui-host
+#                                     SEPARATE PROCESSES. Measured here: they
 #                                     define 98 and 101 runtime symbols
 #                                     respectively, and that is CORRECT -- each
 #                                     is its own process, so its own copy is the
 #                                     right per-process singleton. Scanning them
 #                                     reports a true fact about the wrong
 #                                     question.
-#   OUT  modules/**                   loaded by logos_host, out-of-process.
+#   OUT  modules/**                   loaded by logos_runtime or a module host.
 { pkgs, appPkg, negativeControl ? false }:
 
 let

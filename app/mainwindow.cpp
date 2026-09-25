@@ -34,26 +34,19 @@ MainWindow::MainWindow(logos::host::LogosCore& core,
         return;
     }
 
-    // As the "standalone" shell once capability_module is the token authority,
-    // otherwise on the tokens core's listener mirrors.
-    if (const auto credential = m_core.shellCredential())
-        m_hostApi = logos::adoptAdmittedConsumer(QStringLiteral("standalone"),
-                                                 QString::fromStdString(*credential), this).api;
-    if (!m_hostApi) m_hostApi = new LogosAPI("standalone", this);
-    // Runs on the loader's worker thread. A dependency's own optional
-    // collaborators come up with it.
-    m_loader = new logos::ui::UiPluginLoader(m_hostApi,
+    // The dependency loader runs on the loader's worker thread, and a
+    // dependency's own optional collaborators come up with it. The plugin is
+    // admitted by the runtime, which mints its credential.
+    m_loader = new logos::ui::UiPluginLoader(
         [&core = m_core](const QString& name, bool) {
             return core.loadModule(name.toStdString(), LOGOS_LOAD_REQUIRED_AND_OPTIONAL);
         },
-        this);
-    m_loader->setAcceptInvokableWidgetFactories(true);
-    if (m_core.shellBound()) {
-        m_loader->setAdmitConsumer([&core = m_core](const QString& name) {
+        [&core = m_core](const QString& name) {
             const auto credential = core.admitConsumer(name.toStdString());
             return credential ? QString::fromStdString(*credential) : QString();
-        });
-    }
+        },
+        this);
+    m_loader->setAcceptInvokableWidgetFactories(true);
 
     connect(m_loader, &logos::ui::UiPluginLoader::pluginLoaded, this,
             [this, resolvedPath](const QString&, QWidget* widget) {

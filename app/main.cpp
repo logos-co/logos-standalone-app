@@ -25,7 +25,6 @@
 // exists — liblogos depends on logos-cpp-sdk, so that header cannot include
 // liblogos' own — but now it exists ONCE, where it is tested.
 #include "logos_host_core.h"
-#include "QtCoreTokens.h"
 
 // Find and read metadata.json for a plugin path.
 // For directories: looks inside the directory.
@@ -163,9 +162,6 @@ int main(int argc, char* argv[])
     // as its storage location.
     const QString moduleDataDir = userDir + "/module_data";
     coreConfig.persistenceBasePath = moduleDataDir.toStdString();
-    // Core's module tokens, into the store this app's LogosAPI reads. Only used
-    // while capability_module is not the token authority.
-    coreConfig.tokenListener = logos::ui::saveCoreTokenToQtStore;
     // The app's own modules, and its identity at the runtime.
     coreConfig.bundledModulesDirs = {
         QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules").toStdString()};
@@ -174,7 +170,14 @@ int main(int argc, char* argv[])
     // Destroyed at the end of main, AFTER app.exec() returns — the dtor is the
     // logos_core_cleanup() that used to sit there explicitly.
     logos::host::LogosCore core(argc, argv, std::move(coreConfig));
-    core.start();
+    // Without its token authority (capability_module, bundled beside the app)
+    // nothing could load, so the app does not go on.
+    try {
+        core.start();
+    } catch (const std::exception& e) {
+        qCritical() << "Logos Core did not start:" << e.what();
+        return 1;
+    }
     qInfo() << "Logos Core started (modules dir:" << modulesDir << ")";
 
 

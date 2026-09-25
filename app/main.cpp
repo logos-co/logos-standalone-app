@@ -163,8 +163,13 @@ int main(int argc, char* argv[])
     // as its storage location.
     const QString moduleDataDir = userDir + "/module_data";
     coreConfig.persistenceBasePath = moduleDataDir.toStdString();
-    // Core's module tokens, into the store this app's LogosAPI reads.
+    // Core's module tokens, into the store this app's LogosAPI reads. Only used
+    // while capability_module is not the token authority.
     coreConfig.tokenListener = logos::ui::saveCoreTokenToQtStore;
+    // The app's own modules, and its identity at the runtime.
+    coreConfig.bundledModulesDirs = {
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules").toStdString()};
+    coreConfig.shellName = "standalone";
 
     // Destroyed at the end of main, AFTER app.exec() returns — the dtor is the
     // logos_core_cleanup() that used to sit there explicitly.

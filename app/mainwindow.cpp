@@ -21,13 +21,45 @@
 #include <QQmlEngine>
 #include <QQmlContext>
 #include <QEventLoop>
+#include <QPointer>
 #include <QTimer>
 #include <QtQuickControls2/QQuickStyle>
 
 #include "logos_api.h"
 #include "logos_consumer.h"
 
+#include <memory>
+
 namespace {
+
+// From ui-host's READY to its backend replica being Valid: one schema round
+// trip. Only a wedged backend reaches this; one that exits fails at once.
+constexpr int kBackendReadyTimeoutMs = 30000;
+
+// Wait until the module's backend replica is Valid, since a dynamic replica has
+// no properties for the view to bind until then (view-module-runtime#40).
+bool waitForBackend(LogosQmlBridge* bridge, ViewModuleHost* viewHost,
+                    const QString& moduleName, QString* error)
+{
+    struct Wait { bool done = false; bool ok = false; QString error; QPointer<QEventLoop> loop; };
+    auto wait = std::make_shared<Wait>();
+    QEventLoop loop;
+    wait->loop = &loop;
+    const QMetaObject::Connection exitConn = QObject::connect(
+        viewHost, &ViewModuleHost::processExited, bridge,
+        [bridge, moduleName](int) { bridge->notifyViewModuleCrashed(moduleName); });
+    bridge->prepareViewModule(moduleName, kBackendReadyTimeoutMs,
+        [wait](bool ok, const QString& err) {
+            wait->done = true;
+            wait->ok = ok;
+            wait->error = err;
+            if (wait->loop) wait->loop->quit();
+        });
+    if (!wait->done) loop.exec();
+    QObject::disconnect(exitConn);
+    *error = wait->error;
+    return wait->ok;
+}
 
 /// The backend library a plugin DECLARES, or nothing.
 ///
@@ -129,6 +161,9 @@ QWidget* MainWindow::loadQmlView(const QString& baseDir, const QString& qmlFile,
         delete quickWidget;
         return nullptr;
     }
+    // The backend went ready before this view existed, and views wait for
+    // viewModuleReadyChanged; QmlLiveView::build() does the same.
+    bridge->replayViewModuleState();
     return quickWidget;
 }
 
@@ -394,29 +429,23 @@ void MainWindow::setupUi(const QString& pluginPath, int width, int height)
                         // logosAPI stays: it is owned by m_consumers/this.
                     } else {
                         auto* bridge = new LogosQmlBridge(logosAPI, this);
-                        bridge->setViewModuleSocket(moduleName, viewHost->socketName());
+                        // The backend is reached by the name ui-host published it under;
+                        // the module's replica factory is no longer loaded here.
+                        bridge->setViewModuleSocket(moduleName, viewHost->socketName(),
+                                                    viewHost->sourceName());
 
-                        // By convention each view module ships a
-                        // typed replica factory plugin alongside its
-                        // backend plugin, named
-                        // "<moduleName>_replica_factory.{so,dylib}".
-                        // If present, register it with the bridge so
-                        // logos.module("<moduleName>") in QML returns
-                        // a statically-typed replica.
-                        for (const QString& suffix : { QStringLiteral(".dylib"),
-                                                       QStringLiteral(".so") }) {
-                            QString factoryPath = resolvedPath + "/"
-                                + moduleName + "_replica_factory" + suffix;
-                            if (QFile::exists(factoryPath)) {
-                                bridge->setViewReplicaPlugin(moduleName, factoryPath);
-                                break;
-                            }
-                        }
-
-                        widget = loadQmlView(qmlBaseDir, qmlViewPath, bridge);
-                        if (!widget) {
+                        QString backendError;
+                        if (!waitForBackend(bridge, viewHost, moduleName, &backendError)) {
+                            qWarning() << "Backend of" << moduleName << "not ready:" << backendError;
                             viewHost->stop();
                             delete viewHost;
+                            delete bridge;
+                        } else {
+                            widget = loadQmlView(qmlBaseDir, qmlViewPath, bridge);
+                            if (!widget) {
+                                viewHost->stop();
+                                delete viewHost;
+                            }
                         }
                     }
                 }

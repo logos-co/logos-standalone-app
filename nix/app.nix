@@ -162,7 +162,12 @@ exec "$out/bin/.logos-standalone-app-bin" "\$@"
 EOF
       chmod +x "$out/bin/logos-standalone-app"
 
-      [ -f "${logosLiblogos}/bin/logos_host" ] && cp -L "${logosLiblogos}/bin/logos_host" "$out/bin/"
+      # Every module host liblogos ships; a plain module runs in logos_host_plain.
+      for _host in logos_host logos_host_plain; do
+        if [ -f "${logosLiblogos}/bin/$_host" ]; then
+          cp -L "${logosLiblogos}/bin/$_host" "$out/bin/"
+        fi
+      done
 
       # Ship ui-host binary from logos-view-module-runtime for view module support
       if [ -f "${logosViewModuleRuntime}/bin/ui-host" ]; then

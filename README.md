@@ -33,6 +33,7 @@ logos-standalone [options] <plugin-path>
 | `--title <title>` | `-t` | Window title (default: `name` from `metadata.json`, then plugin filename) |
 | `--width <px>` | | Window width in pixels (default: `1024`) |
 | `--height <px>` | | Window height in pixels (default: `768`) |
+| `--access-policy <enforce\|path\|json>` | | Inter-module access policy, as Logos Basecamp takes it: `enforce`, a JSON policy file, or inline JSON (default: `LOGOS_ACCESS_POLICY`, else none). One that is not valid JSON, or that the runtime refuses, stops the app |
 | `--help` | `-h` | Show help and exit |
 
 ### Examples

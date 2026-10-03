@@ -15,8 +15,12 @@
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QStandardPaths>
 #include <QStyleHints>
+
+#include <optional>
+#include <string>
 
 // The core C API, through logos-cpp-sdk's wrapper rather than a prototype
 // block of our own. This app used to hand-copy the declarations in TWO files,
@@ -53,6 +57,34 @@ static QJsonObject readPluginMetadata(const QString& pluginPath, QString& plugin
         }
     }
     return {};
+}
+
+// One --access-policy value, as Logos Basecamp takes it: "" is none, "enforce" is
+// deny-by-default, text starting with '{' is inline JSON, anything else is a file.
+// Only parse-checked here: the runtime refuses a policy it cannot use.
+static std::optional<std::string> resolveAccessPolicy(const QString& arg, QString* error)
+{
+    const QString trimmed = arg.trimmed();
+    if (trimmed.isEmpty()) return std::nullopt;
+    if (trimmed == QLatin1String("enforce"))
+        return std::string(R"({"version":1,"mode":"enforce","restrictions":{}})");
+    QByteArray content = trimmed.toUtf8();
+    if (!trimmed.startsWith(QLatin1Char('{'))) {
+        QFile f(trimmed);
+        if (!f.open(QIODevice::ReadOnly)) {
+            *error = QString("--access-policy file '%1' could not be opened: %2")
+                         .arg(trimmed, f.errorString());
+            return std::nullopt;
+        }
+        content = f.readAll();
+    }
+    QJsonParseError parseError{};
+    QJsonDocument::fromJson(content, &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        *error = QString("--access-policy is not valid JSON: %1").arg(parseError.errorString());
+        return std::nullopt;
+    }
+    return content.toStdString();
 }
 
 int main(int argc, char* argv[])
@@ -96,6 +128,9 @@ int main(int argc, char* argv[])
         "Window width in pixels (default: 1024)", "px", "1024");
     QCommandLineOption heightOption("height",
         "Window height in pixels (default: 768)", "px", "768");
+    QCommandLineOption accessPolicyOption("access-policy",
+        "Inter-module access policy: 'enforce', a path to a JSON policy file, or inline JSON "
+        "(default: LOGOS_ACCESS_POLICY, else none)", "enforce|path|json");
 
     parser.addOption(pluginOption);
     parser.addOption(modulesDirOption);
@@ -104,9 +139,22 @@ int main(int argc, char* argv[])
     parser.addOption(titleOption);
     parser.addOption(widthOption);
     parser.addOption(heightOption);
+    parser.addOption(accessPolicyOption);
     parser.addPositionalArgument("plugin", "UI plugin path (alternative to --plugin)");
 
     parser.process(app);
+
+    // The flag, then LOGOS_ACCESS_POLICY. One that cannot be read stops the launch
+    // rather than starting a runtime without the restrictions it asked for.
+    QString accessPolicyError;
+    const std::optional<std::string> accessPolicy = resolveAccessPolicy(
+        parser.isSet(accessPolicyOption) ? parser.value(accessPolicyOption)
+                                         : qEnvironmentVariable("LOGOS_ACCESS_POLICY"),
+        &accessPolicyError);
+    if (!accessPolicyError.isEmpty()) {
+        qCritical().noquote() << accessPolicyError;
+        return 1;
+    }
 
     // Resolve plugin path: --plugin takes priority, then first positional arg
     QString pluginPath;
@@ -167,6 +215,7 @@ int main(int argc, char* argv[])
     coreConfig.bundledModulesDirs = {
         QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../modules").toStdString()};
     coreConfig.shellName = "standalone";
+    coreConfig.accessPolicyJson = accessPolicy;
 
     // Destroyed at the end of main, AFTER app.exec() returns; the dtor stops the
     // runtime, which runs in a process of its own.

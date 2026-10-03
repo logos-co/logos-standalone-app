@@ -54,5 +54,18 @@ pkgs.runCommand "logos-standalone-app-smoke-test" {
     exit 1
   fi
 
+  # --access-policy is on the surface, and a policy that is not JSON stops the app
+  # before anything starts, rather than leaving the runtime unrestricted.
+  grep -q -- '--access-policy' "$LOG" || { echo "--access-policy missing from --help"; exit 1; }
+  set +e
+  timeout ${toString timeoutSec} ${appBin} --access-policy '{not json' -p "$out/no-such-plugin" > "$out/policy.log" 2>&1
+  POLICY_CODE=$?
+  set -e
+  cat "$out/policy.log"
+  if [ "$POLICY_CODE" -ne 1 ] || ! grep -q "is not valid JSON" "$out/policy.log"; then
+    echo "A malformed --access-policy did not stop the app (exit code $POLICY_CODE)"
+    exit 1
+  fi
+
   echo "Smoke test passed (exit code: $CODE)"
 ''

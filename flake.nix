@@ -7,13 +7,14 @@
       # The runtime-control wave: the app is the "standalone" shell of a runtime
       # whose capability_module is the token authority. Each input goes back to
       # master as its PR merges (cpp-sdk#169, protocol#97, plugin-qt#48,
-      # liblogos#227, view-module-runtime#36 and #37).
-      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/feat/runtime-process";
-      logos-protocol.url = "github:logos-co/logos-protocol/feat/drop-legacy-mode";
-      logos-plugin-qt.url = "github:logos-co/logos-plugin-qt/feat/drop-legacy-mode";
-      logos-liblogos.url = "github:logos-co/logos-liblogos/feat/runtime-process";
+      # liblogos#227, view-module-runtime#36 and #37), up to method scopes and
+      # module configuration (feat/method-scopes).
+      logos-cpp-sdk.url = "github:logos-co/logos-cpp-sdk/feat/method-scopes";
+      logos-protocol.url = "github:logos-co/logos-protocol/feat/method-scopes";
+      logos-plugin-qt.url = "github:logos-co/logos-plugin-qt/feat/method-scopes";
+      logos-liblogos.url = "github:logos-co/logos-liblogos/feat/method-scopes";
       logos-design-system.url = "github:logos-co/logos-design-system";
-      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/feat/drop-legacy-mode";
+      logos-view-module-runtime.url = "github:logos-co/logos-view-module-runtime/feat/method-scopes";
       logos-qt-mcp.url = "github:logos-co/logos-qt-mcp";
 
       # ONE logos-protocol, and ONE logos-qt-host, in what we ship. qt-host
